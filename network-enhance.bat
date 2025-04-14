@@ -231,7 +231,15 @@ if "%CHANGES_MADE%"=="Y" (
     echo.
     echo Would you like to restart now? (Y/N)
     set /p "restart_choice="
-    if /i "!restart_choice!"=="y" shutdown /r /t 60 /c "Network optimizations will be applied after restart."
+    if /i "!restart_choice!"=="y" (
+        echo.
+        echo System will restart in 60 seconds to apply changes.
+        echo Close any open applications before restart.
+        shutdown /r /t 60 /c "Network optimizations will be applied after restart."
+    ) else (
+        echo.
+        echo Please remember to restart your computer later to apply the changes.
+    )
 ) else (
     echo No optimizations were selected.
 )
