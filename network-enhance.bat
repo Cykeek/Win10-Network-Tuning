@@ -24,6 +24,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Check for updates
+call :check_for_updates
+
 :: Initialize default options
 call :reset_options
 
@@ -1314,3 +1317,49 @@ echo Thank you for using Windows Network Performance Optimizer v%VERSION%
 echo The script will now exit.
 echo.
 exit
+
+:check_for_updates
+echo Checking for updates...
+set "UPDATE_URL=https://raw.githubusercontent.com/network-optimizer/version/main/version.txt"
+set "LATEST_VERSION="
+
+:: Create a temporary file to store the version information
+set "TEMP_VERSION_FILE=%TEMP%\networkoptimizer_version.txt"
+
+:: Use PowerShell to download the latest version file
+powershell -Command "(New-Object System.Net.WebClient).DownloadFile('%UPDATE_URL%', '%TEMP_VERSION_FILE%')" >nul 2>&1
+
+:: Check if download was successful
+if exist "%TEMP_VERSION_FILE%" (
+    :: Read the latest version number
+    for /f "usebackq delims=" %%i in ("%TEMP_VERSION_FILE%") do (
+        set "LATEST_VERSION=%%i"
+        goto version_read
+    )
+    
+    :version_read
+    :: Compare versions
+    if "!LATEST_VERSION!" neq "" (
+        if !LATEST_VERSION! gtr %VERSION% (
+            echo.
+            echo ================================================================
+            echo   UPDATE AVAILABLE
+            echo ================================================================
+            echo   Current version: %VERSION%
+            echo   Latest version: !LATEST_VERSION!
+            echo.
+            echo   Download the latest version from:
+            echo   https://github.com/network-optimizer/releases
+            echo ================================================================
+            echo.
+            timeout /t 3 >nul
+        )
+    )
+    
+    :: Clean up temp file
+    del "%TEMP_VERSION_FILE%" >nul 2>&1
+) else (
+    :: Failed to check for updates, but continue with execution
+    echo [INFO] Update check failed. Continuing with current version.
+)
+exit /b 0
