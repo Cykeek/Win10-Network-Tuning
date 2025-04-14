@@ -4,7 +4,7 @@ chcp 65001 >nul
 color 0A
 
 :: Script Version
-set "VERSION=2.1"
+set "VERSION=2.2"
 
 :: Initialize logging
 set "NETWORK_DIR=%USERPROFILE%\Documents\Networks"
@@ -50,6 +50,7 @@ call :show_option "11" "Network Memory Management" MEM_OPTIMIZE
 call :show_option "12" "Network Security Settings" SEC_OPTIMIZE
 call :show_option "13" "Gaming Mode Optimization" GAME_OPTIMIZE
 call :show_option "14" "Streaming Mode Optimization" STREAM_OPTIMIZE
+call :show_option "15" "Network Maintenance" NET_MAINTENANCE
 echo --------------------------------------------------
 echo A. Apply Selected Optimizations
 echo V. View Current Network Settings
@@ -72,6 +73,7 @@ if /i "%choice%"=="11" call :toggle_option MEM_OPTIMIZE & goto menu
 if /i "%choice%"=="12" call :toggle_option SEC_OPTIMIZE & goto menu
 if /i "%choice%"=="13" call :toggle_option GAME_OPTIMIZE & goto menu
 if /i "%choice%"=="14" call :toggle_option STREAM_OPTIMIZE & goto menu
+if /i "%choice%"=="15" call :toggle_option NET_MAINTENANCE & goto menu
 if /i "%choice%"=="a" goto apply_changes
 if /i "%choice%"=="v" goto view_settings
 if /i "%choice%"=="r" goto reset_options
@@ -96,11 +98,18 @@ exit /b
 set "CREATE_RESTORE=N"
 set "BACKUP_SETTINGS=N"
 set "TCP_OPTIMIZE=N"
+set "UDP_OPTIMIZE=N"
 set "DNS_OPTIMIZE=N"
 set "ADAPTER_POWER=N"
 set "SMB_OPTIMIZE=N"
 set "QOS_OPTIMIZE=N"
 set "IPV_SETTINGS=N"
+set "NIC_TUNE=N"
+set "MEM_OPTIMIZE=N"
+set "SEC_OPTIMIZE=N"
+set "GAME_OPTIMIZE=N"
+set "STREAM_OPTIMIZE=N"
+set "NET_MAINTENANCE=N"
 goto menu
 
 :view_settings
@@ -176,6 +185,11 @@ if "%TCP_OPTIMIZE%"=="Y" (
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    :: Disable Nagle's Algorithm for reduced latency
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
+    :: Additional latency reduction tweaks
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "DefaultTTL" /t REG_DWORD /d 64 /f >nul
     echo [OK] TCP Optimizations applied
 )
 
@@ -227,6 +241,10 @@ if "%QOS_OPTIMIZE%"=="Y" (
     call :log "Applying QoS Optimizations..."
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "NonBestEffortLimit" /t REG_DWORD /d 0 /f >nul
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "TimerResolution" /t REG_DWORD /d 1 /f >nul
+    :: Network priority settings
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "MaxOutstandingSends" /t REG_DWORD /d 8 /f >nul
+    :: Reserve bandwidth for applications
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "ApplicationGUID" /t REG_MULTI_SZ /d "{00000000-0000-0000-0000-000000000000}" /f >nul
     echo [OK] QoS Settings optimized
 )
 
@@ -236,6 +254,9 @@ if "%IPV_SETTINGS%"=="Y" (
     echo Configuring IP Settings...
     call :log "Applying IP Settings..."
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" /v "DisabledComponents" /t REG_DWORD /d 32 /f >nul
+    :: Optimize IPv4 settings
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "EnableICMPRedirect" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "EnablePMTUDiscovery" /t REG_DWORD /d 1 /f >nul
     echo [OK] IP Settings configured
 )
 
@@ -248,6 +269,12 @@ if "%NIC_TUNE%"=="Y" (
     netsh int tcp set global autotuninglevel=normal >nul
     netsh int tcp set global ecncapability=enabled >nul
     netsh int tcp set global timestamps=disabled >nul
+    :: MTU optimization
+    netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
+    netsh interface ipv4 set subinterface "Wi-Fi" mtu=1500 store=persistent >nul 2>&1
+    :: Network adapter offloading optimization
+    powershell -Command "Get-NetAdapter -Physical | ForEach-Object { Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*LsoV2IPv4' -RegistryValue 1 -NoRestart }" >nul 2>&1
+    powershell -Command "Get-NetAdapter -Physical | ForEach-Object { Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*TcpChecksumOffloadIPv4' -RegistryValue 1 -NoRestart }" >nul 2>&1
     echo [OK] Network Interface Tuning applied
 )
 
@@ -298,6 +325,24 @@ if "%STREAM_OPTIMIZE%"=="Y" (
     echo [OK] Streaming Mode Optimizations applied
 )
 
+:: Apply Network Maintenance if selected
+if "%NET_MAINTENANCE%"=="Y" (
+    echo.
+    echo Performing Network Maintenance...
+    call :log "Performing Network Maintenance..."
+    :: Reset network components
+    ipconfig /flushdns >nul
+    netsh winsock reset >nul
+    netsh int ip reset >nul
+    ipconfig /release >nul
+    ipconfig /renew >nul
+    :: Clear ARP cache
+    netsh interface ip delete arpcache >nul
+    :: Reset Internet settings
+    RunDll32.exe InetCpl.cpl,ResetIEtoDefaults >nul 2>&1
+    echo [OK] Network Maintenance completed
+)
+
 :: Verify and finalize changes
 echo.
 echo Verifying changes...
@@ -305,7 +350,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE) do (
+for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
