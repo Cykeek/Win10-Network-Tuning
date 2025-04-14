@@ -1,161 +1,248 @@
 @echo off
+setlocal EnableDelayedExpansion
 chcp 65001 >nul
 color 0A
+
+:: Script Version
+set "VERSION=2.0"
+
+:: Initialize logging
+set "LOG_PATH=%USERPROFILE%\Desktop\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
+set "LOG_PATH=%LOG_PATH: =0%"
 
 :: Check for Administrator privileges
 NET SESSION >nul 2>&1
 if %errorlevel% neq 0 (
-    echo This script requires Administrator privileges.
+    echo [ERROR] This script requires Administrator privileges.
     echo Please right-click and select "Run as administrator".
     pause
     exit /b 1
 )
 
-:: ================= HEADER ===================
-echo.
+:menu
+cls
 echo ==================================================
-echo   Optimizing Windows Network Performance...
+echo   Windows Network Performance Optimizer v%VERSION%
 echo ==================================================
 echo.
+echo Select options to apply (Use Y/N to toggle):
+echo --------------------------------------------------
+call :show_option "1" "Create System Restore Point" CREATE_RESTORE
+call :show_option "2" "Create Registry Backup" BACKUP_SETTINGS
+call :show_option "3" "TCP Optimization" TCP_OPTIMIZE
+call :show_option "4" "DNS Cache Optimization" DNS_OPTIMIZE
+call :show_option "5" "Network Adapter Power Settings" ADAPTER_POWER
+call :show_option "6" "SMB Performance Settings" SMB_OPTIMIZE
+call :show_option "7" "QoS Optimization" QOS_OPTIMIZE
+call :show_option "8" "IPv4/IPv6 Settings" IPV_SETTINGS
+echo --------------------------------------------------
+echo A. Apply Selected Optimizations
+echo V. View Current Network Settings
+echo R. Reset All Options
+echo X. Exit
+echo.
+set /p "choice=Enter your choice: "
 
-:: ============ BACKUP CURRENT SETTINGS ============
-echo Creating backup of current network settings...
-set "BACKUP_PATH=%USERPROFILE%\Desktop\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
-set "BACKUP_PATH=%BACKUP_PATH: =0%"
+if /i "%choice%"=="1" call :toggle_option CREATE_RESTORE & goto menu
+if /i "%choice%"=="2" call :toggle_option BACKUP_SETTINGS & goto menu
+if /i "%choice%"=="3" call :toggle_option TCP_OPTIMIZE & goto menu
+if /i "%choice%"=="4" call :toggle_option DNS_OPTIMIZE & goto menu
+if /i "%choice%"=="5" call :toggle_option ADAPTER_POWER & goto menu
+if /i "%choice%"=="6" call :toggle_option SMB_OPTIMIZE & goto menu
+if /i "%choice%"=="7" call :toggle_option QOS_OPTIMIZE & goto menu
+if /i "%choice%"=="8" call :toggle_option IPV_SETTINGS & goto menu
+if /i "%choice%"=="a" goto apply_changes
+if /i "%choice%"=="v" goto view_settings
+if /i "%choice%"=="r" goto reset_options
+if /i "%choice%"=="x" exit /b 0
+goto menu
 
-echo Backing up TCP/IP settings to: %BACKUP_PATH%
-reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" "%BACKUP_PATH%" /y >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] Network settings backup created successfully at:
-    echo      %BACKUP_PATH%
+:show_option
+if not defined %3 set "%3=N"
+echo [%~1] %~2: [!%3!]
+exit /b
+
+:toggle_option
+if "%1"=="" exit /b
+if "!%1!"=="Y" (
+    set "%1=N"
 ) else (
-    echo [ERROR] Failed to create backup. Continuing without backup...
-    echo Press Ctrl+C to cancel or any key to continue...
-    pause >nul
+    set "%1=Y"
+)
+exit /b
+
+:reset_options
+set "CREATE_RESTORE=N"
+set "BACKUP_SETTINGS=N"
+set "TCP_OPTIMIZE=N"
+set "DNS_OPTIMIZE=N"
+set "ADAPTER_POWER=N"
+set "SMB_OPTIMIZE=N"
+set "QOS_OPTIMIZE=N"
+set "IPV_SETTINGS=N"
+goto menu
+
+:view_settings
+cls
+echo ==================================================
+echo   Current Network Settings
+echo ==================================================
+echo.
+echo TCP/IP Settings:
+netsh interface tcp show global
+echo.
+echo Network Adapters:
+wmic nic where "PhysicalAdapter=TRUE" get Name, Speed
+echo.
+echo DNS Settings:
+ipconfig /displaydns | findstr "Record Name"
+echo.
+pause
+goto menu
+
+:apply_changes
+cls
+echo ==================================================
+echo   Applying Selected Optimizations
+echo ==================================================
+echo.
+
+:: Initialize log file
+echo Windows Network Performance Optimizer v%VERSION% > "%LOG_PATH%"
+echo Optimization started at: %date% %time% >> "%LOG_PATH%"
+echo. >> "%LOG_PATH%"
+
+:: Create System Restore Point if selected
+if "%CREATE_RESTORE%"=="Y" (
+    echo Creating System Restore Point...
+    call :log "Creating System Restore Point..."
+    wmic.exe /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "Network Optimization", 100, 7 >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [OK] System Restore Point created successfully.
+        call :log "[OK] System Restore Point created"
+    ) else (
+        echo [WARNING] Failed to create System Restore Point.
+        call :log "[WARNING] System Restore Point creation failed"
+    )
 )
 
-:: ============ APPLY REGISTRY TWEAKS ============
-echo.
-echo Applying TCP Registry Tweaks...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableTCPChimney /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableRSS /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableTCPA /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v SackOpts /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSize /t REG_DWORD /d 64240 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v DefaultTTL /t REG_DWORD /d 64 /f >nul
-echo [OK] TCP Registry tweaks applied.
+:: Create Registry Backup if selected
+if "%BACKUP_SETTINGS%"=="Y" (
+    echo.
+    echo Creating backup of current network settings...
+    call :log "Creating registry backup..."
+    set "BACKUP_PATH=%USERPROFILE%\Desktop\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
+    set "BACKUP_PATH=!BACKUP_PATH: =0!"
+    
+    echo Backing up TCP/IP settings to: !BACKUP_PATH!
+    reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" "!BACKUP_PATH!" /y >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [OK] Network settings backup created at: !BACKUP_PATH!
+        call :log "[OK] Registry backup created"
+    ) else (
+        echo [ERROR] Failed to create backup.
+        call :log "[ERROR] Registry backup failed"
+        echo Press any key to continue or Ctrl+C to cancel...
+        pause >nul
+    )
+)
 
-:: ============ APPLY NETSH TWEAKS ============
-echo.
-echo Applying Netsh TCP Tweaks...
-netsh int tcp set global autotuninglevel=normal >nul
-echo Ok.
-netsh int tcp set global rss=enabled >nul
-echo Ok.
-netsh int tcp set global ecncapability=enabled >nul
-echo Ok.
-netsh int tcp set global timestamps=disabled >nul
-echo Ok.
-netsh int tcp set global initialrto=3000 >nul
-echo Ok.
-netsh int tcp set global rsc=enabled >nul
-echo Ok.
-netsh int tcp set global nonsackrttresiliency=disabled >nul
-echo Ok.
-netsh int tcp set global maxsynretransmissions=2 >nul
-echo Ok.
-netsh int tcp set global fastopen=enabled >nul
-echo Ok.
-netsh int tcp set global hystart=enabled >nul
-echo Ok.
-netsh int tcp set global prr=enabled >nul
-echo Ok.
-netsh int tcp set global pacingprofile=always >nul
-echo Ok.
+:: Apply TCP Optimizations if selected
+if "%TCP_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying TCP Optimizations...
+    call :log "Applying TCP Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    echo [OK] TCP Optimizations applied
+)
 
-:: ============ DNS CACHE OPTIMIZATION ============
-echo.
-echo Optimizing DNS cache size...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v CacheHashTableBucketSize /t REG_DWORD /d 30 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v CacheHashTableSize /t REG_DWORD /d 384 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxCacheEntryTtlLimit /t REG_DWORD /d 64000 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxSOACacheEntryTtlLimit /t REG_DWORD /d 300 /f >nul
-echo [OK] DNS cache parameters optimized.
+:: Apply DNS Cache Optimizations if selected
+if "%DNS_OPTIMIZE%"=="Y" (
+    echo.
+    echo Optimizing DNS cache...
+    call :log "Applying DNS Cache Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v "CacheHashTableBucketSize" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v "CacheHashTableSize" /t REG_DWORD /d 384 /f >nul
+    echo [OK] DNS Cache optimized
+)
 
-:: ============ DISABLE SMB SIGNING ============
-echo.
-echo Disabling SMB packet signing for performance...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v EnableSecuritySignature /t REG_DWORD /d 0 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v EnableSecuritySignature /t REG_DWORD /d 0 /f >nul
-echo [OK] SMB packet signing disabled.
+:: Apply Network Adapter Power Settings if selected
+if "%ADAPTER_POWER%"=="Y" (
+    echo.
+    echo Optimizing Network Adapter Power Settings...
+    call :log "Applying Network Adapter Power Settings..."
+    powercfg -setacvalueindex scheme_current sub_processor PERFBOOSTMODE 2
+    powercfg -setacvalueindex scheme_current sub_processor PERFBOOSTPOL 100
+    echo [OK] Network Adapter Power Settings optimized
+)
 
-:: ============ PRIORITIZE IPV4 ============
-echo.
-echo Prioritizing IPv4 over IPv6...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" /v DisabledComponents /t REG_DWORD /d 32 /f >nul
-echo [OK] IPv4 is now prioritized over IPv6.
+:: Apply SMB Optimizations if selected
+if "%SMB_OPTIMIZE%"=="Y" (
+    echo.
+    echo Optimizing SMB Settings...
+    call :log "Applying SMB Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "DisableBandwidthThrottling" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "DisableLargeMtu" /t REG_DWORD /d 0 /f >nul
+    echo [OK] SMB Settings optimized
+)
 
-:: ============ DISABLE DELIVERY OPTIMIZATION ============
-echo.
-echo Disabling Windows Update Delivery Optimization...
-reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v DODownloadMode /t REG_DWORD /d 0 /f >nul
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" /v DODownloadMode /t REG_DWORD /d 0 /f >nul
-echo [OK] Delivery Optimization disabled.
+:: Apply QoS Optimizations if selected
+if "%QOS_OPTIMIZE%"=="Y" (
+    echo.
+    echo Optimizing QoS Settings...
+    call :log "Applying QoS Optimizations..."
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "NonBestEffortLimit" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "TimerResolution" /t REG_DWORD /d 1 /f >nul
+    echo [OK] QoS Settings optimized
+)
 
-:: ============ QOS OPTIMIZATION ============
-echo.
-echo Optimizing Quality of Service settings...
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f >nul
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f >nul
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f >nul
-echo [OK] QoS settings optimized.
+:: Apply IPv4/IPv6 Settings if selected
+if "%IPV_SETTINGS%"=="Y" (
+    echo.
+    echo Configuring IP Settings...
+    call :log "Applying IP Settings..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" /v "DisabledComponents" /t REG_DWORD /d 32 /f >nul
+    echo [OK] IP Settings configured
+)
 
-:: ============ NETWORK ADAPTER POWER SETTINGS ============
+:: Verify and finalize changes
 echo.
-echo Optimizing network adapter power settings...
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\0001" /v PnPCapabilities /t REG_DWORD /d 24 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\0001" /v *PowerSaving /t REG_DWORD /d 0 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\0001" /v *SelectiveSuspend /t REG_DWORD /d 0 /f >nul
-echo [OK] Network adapter power settings optimized.
+echo Verifying changes...
+call :log "Verifying changes..."
 
-:: ============ SYSTEM NETWORK SETTINGS ============
-echo.
-echo Optimizing system network settings...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultReceiveWindow /t REG_DWORD /d 64240 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultSendWindow /t REG_DWORD /d 64240 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxUserPort /t REG_DWORD /d 65534 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpTimedWaitDelay /t REG_DWORD /d 30 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxFreeTcbs /t REG_DWORD /d 65535 /f >nul
-echo [OK] System network settings optimized.
+:: Check if any optimizations were applied
+set "CHANGES_MADE=N"
+for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS) do (
+    if "!%%i!"=="Y" set "CHANGES_MADE=Y"
+)
 
-:: ============ ADDITIONAL TCP OPTIMIZATIONS ============
-echo.
-echo Applying additional TCP optimizations...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v KeepAliveTime /t REG_DWORD /d 300000 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v KeepAliveInterval /t REG_DWORD /d 1000 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpMaxDataRetransmissions /t REG_DWORD /d 5 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpMaxConnectRetransmissions /t REG_DWORD /d 2 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpNumConnections /t REG_DWORD /d 16777214 /f >nul
-echo [OK] Additional TCP optimizations applied.
+if "%CHANGES_MADE%"=="Y" (
+    echo.
+    echo ==================================================
+    echo   Optimization Complete
+    echo ==================================================
+    echo.
+    echo Important Notes:
+    echo 1. Log file created at: %LOG_PATH%
+    if "%BACKUP_SETTINGS%"=="Y" echo 2. Registry backup at: %BACKUP_PATH%
+    echo 3. A system restart is required to apply all changes.
+    echo.
+    echo Would you like to restart now? (Y/N)
+    set /p "restart_choice="
+    if /i "!restart_choice!"=="y" shutdown /r /t 60 /c "Network optimizations will be applied after restart."
+) else (
+    echo No optimizations were selected.
+)
 
-:: ============ NETWORK INTERFACE SETTINGS ============
 echo.
-echo Optimizing network interface settings...
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v MTU /t REG_DWORD /d 1500 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnablePMTUDiscovery /t REG_DWORD /d 1 /f >nul
-reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnablePMTUBHDetect /t REG_DWORD /d 0 /f >nul
-echo [OK] Network interface settings optimized.
-
-:: ============ FLUSH DNS AND RESET NETWORK STACK ============
-echo.
-echo Flushing DNS and resetting network stack...
-ipconfig /flushdns >nul
-netsh int ip reset >nul
-netsh winsock reset >nul
-echo [OK] Network stack and DNS cache reset.
-
-:: ============ DONE ============
-echo.
-echo [OK] All network optimizations applied. Please restart your computer to finalize the changes.
+echo Press any key to return to menu...
 pause >nul
+goto menu
+
+:log
+echo %* >> "%LOG_PATH%"
+exit /b 0
+
+endlocal
