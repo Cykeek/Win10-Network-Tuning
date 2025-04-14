@@ -53,10 +53,14 @@ echo  [9] Generate Network Health Report
 echo  [10] View Current Network Settings
 echo  [11] Clean Logs and Temporary Files
 echo.
+echo  QUICK OPTIONS:
+echo  ----------------------------------------------------------------
+echo  [R] Recommended Settings (Best for Most Users)
+echo.
 echo  [D] View Details for an Option (Shows what changes will be made)
 echo  [A] Apply Selected Optimizations
-echo  [R] Reset All Selections
-echo  [X] Exit
+echo  [X] Reset All Selections
+echo  [E] Exit
 echo.
 echo  Currently selected: %SELECTED_COUNT% optimizations
 echo.
@@ -75,8 +79,9 @@ if "%choice%"=="10" goto view_settings
 if "%choice%"=="11" goto clean_logs
 if /i "%choice%"=="D" goto show_details
 if /i "%choice%"=="A" goto apply_changes
-if /i "%choice%"=="R" call :reset_options
-if /i "%choice%"=="X" goto exit_script
+if /i "%choice%"=="R" call :apply_recommended_settings
+if /i "%choice%"=="X" call :reset_options
+if /i "%choice%"=="E" goto exit_script
 goto main_menu
 
 :menu_tcp_options
@@ -574,6 +579,14 @@ if "!%1!"=="Y" (
     set "%1=N"
     set /a SELECTED_COUNT-=1
 ) else (
+    set "%1=Y"
+    set /a SELECTED_COUNT+=1
+)
+exit /b
+
+:set_option
+if "%1"=="" exit /b
+if "!%1!"=="N" (
     set "%1=Y"
     set /a SELECTED_COUNT+=1
 )
@@ -1379,3 +1392,69 @@ echo %operation_text%...
 call :show_progress_bar %CURRENT_STEP% %TOTAL_STEPS% "Progress:"
 call :log "%operation_text%..."
 exit /b
+
+:apply_recommended_settings
+:: First reset all options
+call :reset_options notmenu
+
+:: Apply recommended settings for typical users
+echo.
+echo Applying recommended settings for optimal performance...
+
+:: Create a restore point for safety
+call :set_option CREATE_RESTORE
+
+:: Essential TCP/IP optimizations
+call :set_option TCP_OPTIMIZE
+
+:: DNS optimization for faster browsing
+call :set_option DNS_OPTIMIZE
+
+:: Network adapter power settings to prevent throttling
+call :set_option ADAPTER_POWER
+
+:: QoS for better traffic management
+call :set_option QOS_OPTIMIZE
+
+:: Memory management for better connection handling
+call :set_option MEM_OPTIMIZE
+
+:: Auto-detect connection type and optimize accordingly
+call :set_option CONN_TYPE_OPTIMIZE
+
+:: Basic network security
+call :set_option SEC_OPTIMIZE
+
+:: Network maintenance to clean up network stack
+call :set_option NET_MAINTENANCE
+
+echo.
+echo Recommended settings selected. %SELECTED_COUNT% optimizations ready to apply.
+echo These settings provide a balanced improvement for general Internet usage,
+echo streaming, browsing, and overall network stability.
+echo.
+echo Would you like to apply these optimizations now? (Y/N)
+set /p "apply_now="
+
+if /i "!apply_now!"=="y" (
+    :: Apply the optimizations
+    goto apply_changes_and_reset
+) else (
+    echo.
+    echo Returning to main menu with recommended settings selected.
+    echo You can apply them later by selecting option [A].
+    echo.
+    echo Press any key to continue...
+    pause >nul
+    goto main_menu
+)
+
+:apply_changes_and_reset
+:: Call the apply_changes function
+call :apply_changes
+
+:: Reset all options after application
+call :reset_options notmenu
+
+:: Return to main menu
+goto main_menu
