@@ -7,7 +7,9 @@ color 0A
 set "VERSION=2.1"
 
 :: Initialize logging
-set "LOG_PATH=%USERPROFILE%\Desktop\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
+set "NETWORK_DIR=%USERPROFILE%\Documents\Networks"
+if not exist "%NETWORK_DIR%" mkdir "%NETWORK_DIR%"
+set "LOG_PATH=%NETWORK_DIR%\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
 set "LOG_PATH=%LOG_PATH: =0%"
 
 :: Check for Administrator privileges
@@ -150,7 +152,7 @@ if "%BACKUP_SETTINGS%"=="Y" (
     echo.
     echo Creating backup of current network settings...
     call :log "Creating registry backup..."
-    set "BACKUP_PATH=%USERPROFILE%\Desktop\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
+    set "BACKUP_PATH=%NETWORK_DIR%\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
     set "BACKUP_PATH=!BACKUP_PATH: =0!"
     
     echo Backing up TCP/IP settings to: !BACKUP_PATH!
