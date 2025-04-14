@@ -236,18 +236,24 @@ if "%CHANGES_MADE%"=="Y" (
         echo System will restart in 60 seconds to apply changes.
         echo Close any open applications before restart.
         shutdown /r /t 60 /c "Network optimizations will be applied after restart."
+        exit /b 0
     ) else (
         echo.
         echo Please remember to restart your computer later to apply the changes.
+        echo.
+        echo Press any key to return to menu...
+        pause >nul
+        goto menu
     )
 ) else (
+    echo.
     echo No optimizations were selected.
+    echo Please select at least one optimization option and try again.
+    echo.
+    echo Press any key to return to menu...
+    pause >nul
+    goto menu
 )
-
-echo.
-echo Press any key to return to menu...
-pause >nul
-goto menu
 
 :log
 echo %* >> "%LOG_PATH%"
