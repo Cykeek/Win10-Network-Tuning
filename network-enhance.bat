@@ -8,8 +8,10 @@ set "VERSION=2.3"
 
 :: Initialize logging
 set "NETWORK_DIR=%USERPROFILE%\Documents\Networks"
+set "NETWORK_LOGS=%NETWORK_DIR%\Logs"
 if not exist "%NETWORK_DIR%" mkdir "%NETWORK_DIR%"
-set "LOG_PATH=%NETWORK_DIR%\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
+if not exist "%NETWORK_LOGS%" mkdir "%NETWORK_LOGS%"
+set "LOG_PATH=%NETWORK_LOGS%\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
 set "LOG_PATH=%LOG_PATH: =0%"
 
 :: Check for Administrator privileges
@@ -58,6 +60,7 @@ echo --------------------------------------------------
 echo A. Apply Selected Optimizations
 echo V. View Current Network Settings
 echo R. Reset All Options
+echo C. Clean Log Files
 echo X. Exit
 echo.
 set /p "choice=Enter your choice: "
@@ -83,6 +86,7 @@ if /i "%choice%"=="18" call :toggle_option HEALTH_REPORT & goto menu
 if /i "%choice%"=="a" goto apply_changes
 if /i "%choice%"=="v" goto view_settings
 if /i "%choice%"=="r" goto reset_options
+if /i "%choice%"=="c" goto clean_logs
 if /i "%choice%"=="x" exit /b 0
 goto menu
 
@@ -156,7 +160,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo Capturing network baseline statistics...
     call :log "Capturing network baseline statistics..."
     
-    set "HEALTH_DATA_PATH=%NETWORK_DIR%\NetworkHealth_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
+    set "HEALTH_DATA_PATH=%NETWORK_LOGS%\NetworkHealth_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
     set "HEALTH_DATA_PATH=!HEALTH_DATA_PATH: =0!"
     
     echo Network Health Report - BEFORE Optimization > "!HEALTH_DATA_PATH!"
@@ -649,7 +653,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo. >> "!HEALTH_DATA_PATH!"
     
     :: Create a simple HTML report for better visualization
-    set "HTML_REPORT=%NETWORK_DIR%\NetworkReport_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.html"
+    set "HTML_REPORT=%NETWORK_LOGS%\NetworkReport_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.html"
     set "HTML_REPORT=!HTML_REPORT: =0!"
     
     echo ^<!DOCTYPE html^> > "!HTML_REPORT!"
@@ -763,6 +767,36 @@ if "%CHANGES_MADE%"=="Y" (
     pause >nul
     goto menu
 )
+
+:clean_logs
+cls
+echo ==================================================
+echo   Cleaning Log Files
+echo ==================================================
+echo.
+echo This will delete all log and report files in the "%NETWORK_LOGS%" directory.
+echo.
+echo Are you sure you want to proceed? (Y/N)
+set /p "clean_choice="
+if /i "%clean_choice%"=="y" (
+    echo.
+    echo Deleting log files...
+    del /f /q "%NETWORK_LOGS%\*.txt" 2>nul
+    del /f /q "%NETWORK_LOGS%\*.html" 2>nul
+    del /f /q "%NETWORK_LOGS%\*.log" 2>nul
+    echo.
+    echo Log files have been deleted.
+    echo.
+    echo Press any key to return to menu...
+    pause >nul
+) else (
+    echo.
+    echo Log cleanup cancelled.
+    echo.
+    echo Press any key to return to menu...
+    pause >nul
+)
+goto menu
 
 :log
 echo %* >> "%LOG_PATH%"
