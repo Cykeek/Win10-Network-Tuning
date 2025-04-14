@@ -294,9 +294,109 @@ if "%SEC_OPTIMIZE%"=="Y" (
     echo.
     echo Applying Network Security Optimizations...
     call :log "Applying Network Security Optimizations..."
+    
+    :: Basic firewall setup
+    echo Setting up firewall policies...
     netsh advfirewall set allprofiles state on >nul
     netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\BFE" /v "Start" /t REG_DWORD /d 2 /f >nul
+    
+    :: Scan for vulnerable ports and disable them
+    echo Checking for vulnerable ports...
+    call :log "Checking for vulnerable ports..."
+    
+    :: Check for open vulnerable ports using netstat
+    netstat -an | findstr "LISTENING" > "%TEMP%\open_ports.txt"
+    
+    :: List of commonly vulnerable ports to check
+    set "VULNERABLE_PORTS=135 137 138 139 445 1433 1434 3389 5000 5432"
+    
+    for %%p in (%VULNERABLE_PORTS%) do (
+        findstr ":%%p" "%TEMP%\open_ports.txt" >nul
+        if !errorlevel! equ 0 (
+            echo -- Vulnerable port %%p found open, creating blocking rule
+            call :log "Blocking vulnerable port %%p"
+            netsh advfirewall firewall add rule name="Block Vulnerable Port %%p" dir=in action=block protocol=TCP localport=%%p >nul
+            netsh advfirewall firewall add rule name="Block Vulnerable Port %%p UDP" dir=in action=block protocol=UDP localport=%%p >nul
+        )
+    )
+    
+    :: Block known malicious IP ranges
+    echo Blocking known malicious IP ranges...
+    call :log "Blocking known malicious IP ranges..."
+    
+    :: Create a new firewall rule group for malicious IPs
+    netsh advfirewall firewall add rule name="Block Malicious IP Ranges" dir=in action=block remoteip=185.174.100.0/24,194.165.16.0/24,5.188.86.0/24,185.254.196.0/24,194.87.232.0/24,91.219.236.0/24,176.107.176.0/24 >nul
+    
+    :: Add outbound block as well
+    netsh advfirewall firewall add rule name="Block Malicious IP Ranges (Outbound)" dir=out action=block remoteip=185.174.100.0/24,194.165.16.0/24,5.188.86.0/24,185.254.196.0/24,194.87.232.0/24,91.219.236.0/24,176.107.176.0/24 >nul
+    
+    :: Enable stealth mode (don't respond to pings)
+    echo Enabling stealth mode...
+    netsh advfirewall firewall add rule name="Block ICMP Ping" protocol=icmpv4:8,any dir=in action=block >nul
+    
+    :: Block unused protocols
+    echo Securing network protocols...
+    :: Disable NetBIOS over TCP/IP
+    for /f "tokens=*" %%i in ('wmic nicconfig where TcpipNetbiosOptions^=0 get Index /format:list ^| findstr "="') do (
+        for /f "tokens=2 delims==" %%j in ("%%i") do (
+            wmic nicconfig where Index=%%j call SetTcpipNetbios 2 >nul
+        )
+    )
+    
+    :: Protocol Hardening
+    echo Applying protocol hardening...
+    call :log "Applying protocol hardening..."
+    
+    :: Disable SMBv1 (vulnerable to WannaCry and other exploits)
+    echo -- Disabling SMBv1...
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v "SMB1" /t REG_DWORD /d 0 /f >nul
+    sc.exe config lanmanworkstation depend= bowser/mrxsmb20/nsi >nul
+    sc.exe config mrxsmb10 start= disabled >nul
+    
+    :: Enable SMB signing and encryption
+    echo -- Enabling SMB signing and encryption...
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v "RequireSecuritySignature" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v "EnableSecuritySignature" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "RequireSecuritySignature" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "EnableSecuritySignature" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v "EncryptData" /t REG_DWORD /d 1 /f >nul
+    
+    :: TLS configuration - Enable TLS 1.2 and disable older versions
+    echo -- Configuring TLS security...
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server" /v "Enabled" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server" /v "DisabledByDefault" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client" /v "Enabled" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client" /v "DisabledByDefault" /t REG_DWORD /d 0 /f >nul
+    
+    :: Disable SSL 2.0 and 3.0
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server" /v "Enabled" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server" /v "Enabled" /t REG_DWORD /d 0 /f >nul
+    
+    :: Network Discovery Protection
+    echo Applying network discovery protection...
+    call :log "Applying network discovery protection..."
+    
+    :: Disable LLMNR (Link-Local Multicast Name Resolution)
+    echo -- Disabling LLMNR...
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v "EnableMulticast" /t REG_DWORD /d 0 /f >nul
+    
+    :: Disable WPAD (Web Proxy Auto-Discovery)
+    echo -- Disabling WPAD...
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Wpad" /v "WpadOverride" /t REG_DWORD /d 1 /f >nul
+    
+    :: Set networks to private profile for better security
+    echo -- Setting networks to private profile...
+    powershell -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private" >nul 2>&1
+    
+    :: Disable NetBIOS name service and WINS lookup
+    echo -- Disabling NetBIOS name service...
+    for /f "tokens=*" %%i in ('wmic nicconfig where "IPEnabled=TRUE" get Index /format:list ^| findstr "="') do (
+        for /f "tokens=2 delims==" %%j in ("%%i") do (
+            wmic nicconfig where Index=%%j call SetTcpipNetbios 2 >nul
+        )
+    )
+    
     echo [OK] Network Security Optimizations applied
 )
 
