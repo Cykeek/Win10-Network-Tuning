@@ -2,6 +2,15 @@
 chcp 65001 >nul
 color 0A
 
+:: Check for Administrator privileges
+NET SESSION >nul 2>&1
+if %errorlevel% neq 0 (
+    echo This script requires Administrator privileges.
+    echo Please right-click and select "Run as administrator".
+    pause
+    exit /b 1
+)
+
 :: ================= HEADER ===================
 echo.
 echo ==================================================
@@ -10,11 +19,19 @@ echo ==================================================
 echo.
 
 :: ============ BACKUP CURRENT SETTINGS ============
-echo Backing up current TCP registry settings...
-start /b "" cmd /c "reg export \"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\" \"C:\TCPSettingsBackup.reg\" >nul 2>&1 && echo [OK] Backup saved to C:\TCPSettingsBackup.reg"
-timeout /t 5 >nul
-if not exist "C:\TCPSettingsBackup.reg" (
-    echo [X] Backup may have failed or is taking too long. Please ensure admin rights.
+echo Creating backup of current network settings...
+set "BACKUP_PATH=%USERPROFILE%\Desktop\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
+set "BACKUP_PATH=%BACKUP_PATH: =0%"
+
+echo Backing up TCP/IP settings to: %BACKUP_PATH%
+reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" "%BACKUP_PATH%" /y >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Network settings backup created successfully at:
+    echo      %BACKUP_PATH%
+) else (
+    echo [ERROR] Failed to create backup. Continuing without backup...
+    echo Press Ctrl+C to cancel or any key to continue...
+    pause >nul
 )
 
 :: ============ APPLY REGISTRY TWEAKS ============
