@@ -630,10 +630,31 @@ echo Windows Network Performance Optimizer v%VERSION% > "%LOG_PATH%"
 echo Optimization started at: %date% %time% >> "%LOG_PATH%"
 echo. >> "%LOG_PATH%"
 
+:: Calculate total steps for progress bar
+set /a TOTAL_STEPS=0
+if "%CREATE_RESTORE%"=="Y" set /a TOTAL_STEPS+=1
+if "%BACKUP_SETTINGS%"=="Y" set /a TOTAL_STEPS+=1
+if "%TCP_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%UDP_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%DNS_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%ADAPTER_POWER%"=="Y" set /a TOTAL_STEPS+=1
+if "%SMB_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%QOS_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%IPV_SETTINGS%"=="Y" set /a TOTAL_STEPS+=1
+if "%CONN_TYPE_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%MEM_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%SEC_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%GAME_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%STREAM_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
+if "%NET_MAINTENANCE%"=="Y" set /a TOTAL_STEPS+=1
+if "%HEALTH_REPORT%"=="Y" set /a TOTAL_STEPS+=2
+
+:: Initialize current step
+set /a CURRENT_STEP=0
+
 :: Capture network health data before changes if health report is selected
 if "%HEALTH_REPORT%"=="Y" (
-    echo Capturing network baseline statistics...
-    call :log "Capturing network baseline statistics..."
+    call :update_progress "Capturing network baseline statistics"
     
     set "HEALTH_DATA_PATH=%NETWORK_LOGS%\NetworkHealth_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
     set "HEALTH_DATA_PATH=!HEALTH_DATA_PATH: =0!"
@@ -666,38 +687,30 @@ if "%HEALTH_REPORT%"=="Y" (
     ipconfig /displaydns | findstr "Record Name" >> "!HEALTH_DATA_PATH!" 2>&1
     echo. >> "!HEALTH_DATA_PATH!"
     
-    echo [OK] Network baseline captured
+    call :log "[OK] Network baseline captured"
 )
 
 :: Create System Restore Point if selected
 if "%CREATE_RESTORE%"=="Y" (
-    echo Creating System Restore Point...
-    call :log "Creating System Restore Point..."
+    call :update_progress "Creating System Restore Point"
     wmic.exe /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "Network Optimization", 100, 7 >nul 2>&1
     if !errorlevel! equ 0 (
-        echo [OK] System Restore Point created successfully.
         call :log "[OK] System Restore Point created"
     ) else (
-        echo [WARNING] Failed to create System Restore Point.
         call :log "[WARNING] System Restore Point creation failed"
     )
 )
 
 :: Create Registry Backup if selected
 if "%BACKUP_SETTINGS%"=="Y" (
-    echo.
-    echo Creating backup of current network settings...
-    call :log "Creating registry backup..."
+    call :update_progress "Creating backup of current network settings"
     set "BACKUP_PATH=%NETWORK_DIR%\NetworkSettingsBackup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.reg"
     set "BACKUP_PATH=!BACKUP_PATH: =0!"
     
-    echo Backing up TCP/IP settings to: !BACKUP_PATH!
     reg export "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" "!BACKUP_PATH!" /y >nul 2>&1
     if !errorlevel! equ 0 (
-        echo [OK] Network settings backup created at: !BACKUP_PATH!
         call :log "[OK] Registry backup created"
     ) else (
-        echo [ERROR] Failed to create backup.
         call :log "[ERROR] Registry backup failed"
         echo Press any key to continue or Ctrl+C to cancel...
         pause >nul
@@ -706,9 +719,7 @@ if "%BACKUP_SETTINGS%"=="Y" (
 
 :: Apply TCP Optimizations if selected
 if "%TCP_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying TCP Optimizations...
-    call :log "Applying TCP Optimizations..."
+    call :update_progress "Applying TCP Optimizations"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
@@ -717,81 +728,67 @@ if "%TCP_OPTIMIZE%"=="Y" (
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
     :: Additional latency reduction tweaks
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "DefaultTTL" /t REG_DWORD /d 64 /f >nul
-    echo [OK] TCP Optimizations applied
+    call :log "[OK] TCP Optimizations applied"
 )
 
 :: Apply UDP Optimizations if selected
 if "%UDP_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying UDP Optimizations...
-    call :log "Applying UDP Optimizations..."
+    call :update_progress "Applying UDP Optimizations"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastSendDatagramThreshold" /t REG_DWORD /d 1000 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastCopyReceiveThreshold" /t REG_DWORD /d 1000 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "DynamicSendBufferDisable" /t REG_DWORD /d 0 /f >nul
-    echo [OK] UDP Optimizations applied
+    call :log "[OK] UDP Optimizations applied"
 )
 
 :: Apply DNS Cache Optimizations if selected
 if "%DNS_OPTIMIZE%"=="Y" (
-    echo.
-    echo Optimizing DNS cache...
-    call :log "Applying DNS Cache Optimizations..."
+    call :update_progress "Optimizing DNS cache"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v "CacheHashTableBucketSize" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v "CacheHashTableSize" /t REG_DWORD /d 384 /f >nul
-    echo [OK] DNS Cache optimized
+    call :log "[OK] DNS Cache optimized"
 )
 
 :: Apply Network Adapter Power Settings if selected
 if "%ADAPTER_POWER%"=="Y" (
-    echo.
-    echo Optimizing Network Adapter Power Settings...
-    call :log "Applying Network Adapter Power Settings..."
+    call :update_progress "Optimizing Network Adapter Power Settings"
     powercfg -setacvalueindex scheme_current sub_processor PERFBOOSTMODE 2
     powercfg -setacvalueindex scheme_current sub_processor PERFBOOSTPOL 100
-    echo [OK] Network Adapter Power Settings optimized
+    call :log "[OK] Network Adapter Power Settings optimized"
 )
 
 :: Apply SMB Optimizations if selected
 if "%SMB_OPTIMIZE%"=="Y" (
-    echo.
-    echo Optimizing SMB Settings...
-    call :log "Applying SMB Optimizations..."
+    call :update_progress "Optimizing SMB Settings"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "DisableBandwidthThrottling" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v "DisableLargeMtu" /t REG_DWORD /d 0 /f >nul
-    echo [OK] SMB Settings optimized
+    call :log "[OK] SMB Settings optimized"
 )
 
 :: Apply QoS Optimizations if selected
 if "%QOS_OPTIMIZE%"=="Y" (
-    echo.
-    echo Optimizing QoS Settings...
-    call :log "Applying QoS Optimizations..."
+    call :update_progress "Optimizing QoS Settings"
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "NonBestEffortLimit" /t REG_DWORD /d 0 /f >nul
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "TimerResolution" /t REG_DWORD /d 1 /f >nul
     :: Network priority settings
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "MaxOutstandingSends" /t REG_DWORD /d 8 /f >nul
     :: Reserve bandwidth for applications
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "ApplicationGUID" /t REG_MULTI_SZ /d "{00000000-0000-0000-0000-000000000000}" /f >nul
-    echo [OK] QoS Settings optimized
+    call :log "[OK] QoS Settings optimized"
 )
 
 :: Apply IPv4/IPv6 Settings if selected
 if "%IPV_SETTINGS%"=="Y" (
-    echo.
-    echo Configuring IP Settings...
-    call :log "Applying IP Settings..."
+    call :update_progress "Applying IP Settings"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" /v "DisabledComponents" /t REG_DWORD /d 32 /f >nul
     :: Optimize IPv4 settings
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "EnableICMPRedirect" /t REG_DWORD /d 0 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "EnablePMTUDiscovery" /t REG_DWORD /d 1 /f >nul
-    echo [OK] IP Settings configured
+    call :log "[OK] IP Settings configured"
 )
 
 :: Apply Network Interface Tuning if selected
 if "%CONN_TYPE_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying Connection Type Optimization...
-    call :log "Applying Connection Type Optimization..."
+    call :update_progress "Applying Connection Type Optimization"
     
     :: Detect connection type using multiple methods
     echo -- Detecting connection type...
@@ -952,26 +949,22 @@ if "%CONN_TYPE_OPTIMIZE%"=="Y" (
     if exist "%CONN_DETECT_FILE%" del "%CONN_DETECT_FILE%" >nul 2>&1
     if exist "%NETSH_OUTPUT%" del "%NETSH_OUTPUT%" >nul 2>&1
     
-    echo [OK] Connection Type Optimization applied for !CONN_TYPE!
+    call :log "[OK] Connection Type Optimization applied for !CONN_TYPE!"
 )
 
 :: Apply Advanced Settings if needed
 :: Apply Memory Management Optimizations if selected
 if "%MEM_OPTIMIZE%"=="Y" (
-    echo.
-    echo Optimizing Network Memory Management...
-    call :log "Applying Memory Management Optimizations..."
+    call :update_progress "Optimizing Network Memory Management"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "MaxUserPort" /t REG_DWORD /d 65534 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpTimedWaitDelay" /t REG_DWORD /d 30 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "MaxFreeTcbs" /t REG_DWORD /d 65535 /f >nul
-    echo [OK] Memory Management Optimizations applied
+    call :log "[OK] Memory Management Optimizations applied"
 )
 
 :: Apply Network Security Settings if selected
 if "%SEC_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying Network Security Optimizations...
-    call :log "Applying Network Security Optimizations..."
+    call :update_progress "Applying Network Security Optimizations"
     
     :: Basic firewall setup
     echo Setting up firewall policies...
@@ -1075,39 +1068,33 @@ if "%SEC_OPTIMIZE%"=="Y" (
         )
     )
     
-    echo [OK] Network Security Optimizations applied
+    call :log "[OK] Network Security Optimizations applied"
 )
 
 :: Apply Gaming Mode Optimizations if selected
 if "%GAME_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying Gaming Mode Optimizations...
-    call :log "Applying Gaming Mode Optimizations..."
+    call :update_progress "Applying Gaming Mode Optimizations"
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f >nul
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d "High" /f >nul
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f >nul
-    echo [OK] Gaming Mode Optimizations applied
+    call :log "[OK] Gaming Mode Optimizations applied"
 )
 
 :: Apply Streaming Mode Optimizations if selected
 if "%STREAM_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying Streaming Mode Optimizations...
-    call :log "Applying Streaming Mode Optimizations..."
+    call :update_progress "Applying Streaming Mode Optimizations"
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
     netsh int tcp set global initialRto=2000 >nul
-    echo [OK] Streaming Mode Optimizations applied
+    call :log "[OK] Streaming Mode Optimizations applied"
 )
 
 :: Apply Network Maintenance if selected
 if "%NET_MAINTENANCE%"=="Y" (
-    echo.
-    echo Performing Network Maintenance...
-    call :log "Performing Network Maintenance..."
+    call :update_progress "Performing Network Maintenance"
     :: Reset network components
     ipconfig /flushdns >nul
     netsh winsock reset >nul
@@ -1118,14 +1105,12 @@ if "%NET_MAINTENANCE%"=="Y" (
     netsh interface ip delete arpcache >nul
     :: Reset Internet settings
     RunDll32.exe InetCpl.cpl,ResetIEtoDefaults >nul 2>&1
-    echo [OK] Network Maintenance completed
+    call :log "[OK] Network Maintenance completed"
 )
 
 :: Generate the Network Health Report if selected
 if "%HEALTH_REPORT%"=="Y" (
-    echo.
-    echo Generating Network Health Report...
-    call :log "Generating Network Health Report..."
+    call :update_progress "Generating Network Health Report"
     
     :: Append 'AFTER' data to the health report
     echo. >> "!HEALTH_DATA_PATH!"
@@ -1221,9 +1206,8 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^</body^> >> "!HTML_REPORT!"
     echo ^</html^> >> "!HTML_REPORT!"
     
-    echo [OK] Network Health Report generated
+    call :log "[OK] Network Health Report generated"
     echo -- Report saved to: !HTML_REPORT!
-    call :log "Network Health Report generated at !HTML_REPORT!"
 )
 
 :: Verify and finalize changes
@@ -1363,3 +1347,35 @@ if exist "%TEMP_VERSION_FILE%" (
     echo [INFO] Update check failed. Continuing with current version.
 )
 exit /b 0
+
+:show_progress_bar
+setlocal
+set "fill=%~1"
+set "total=%~2"
+set "prefix=%~3"
+
+:: Calculate bar width - width 50 chars
+set /a bar_width=50
+set /a fill_width=(%fill% * %bar_width%) / %total%
+
+:: Build progress bar
+set "progress_bar="
+for /l %%i in (1,1,%fill_width%) do set "progress_bar=!progress_bar!█"
+for /l %%i in (%fill_width%,1,%bar_width%) do set "progress_bar=!progress_bar!░"
+
+:: Calculate percentage
+set /a percent=(%fill% * 100) / %total%
+
+:: Show progress bar
+echo %prefix% [!progress_bar!] !percent!%%
+endlocal
+exit /b
+
+:update_progress
+set /a CURRENT_STEP+=1
+set "operation_text=%~1"
+echo.
+echo %operation_text%...
+call :show_progress_bar %CURRENT_STEP% %TOTAL_STEPS% "Progress:"
+call :log "%operation_text%..."
+exit /b
