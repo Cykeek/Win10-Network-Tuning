@@ -4,7 +4,8 @@ chcp 65001 >nul
 color 0A
 
 :: Script Version
-set "VERSION=2.3"
+set "VERSION=3.1"
+set "VERSION_INFO=Windows Network Performance Optimizer v%VERSION%"
 
 :: Initialize logging
 set "NETWORK_DIR=%USERPROFILE%\Documents\Networks"
@@ -23,88 +24,560 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:menu
+:: Initialize default options
+call :reset_options
+
+:main_menu
+cls
+echo ================================================================
+echo    %VERSION_INFO%
+echo ================================================================
+echo.
+echo  OPTIMIZATION OPTIONS:
+echo  ----------------------------------------------------------------
+echo  [1] TCP/IP Protocol Stack Optimizations
+echo  [2] Connection Type-Specific Optimizations (WiFi/Ethernet/Fiber)
+echo  [3] DNS and Memory Management
+echo  [4] Network Security Settings
+echo  [5] Gaming and Streaming Mode
+echo  [6] Show All Available Optimizations
+echo.
+echo  TOOLS AND UTILITIES:
+echo  ----------------------------------------------------------------
+echo  [7] Create System Restore Point (RECOMMENDED)
+echo  [8] Backup Current Settings
+echo  [9] Generate Network Health Report
+echo  [10] View Current Network Settings
+echo  [11] Clean Logs and Temporary Files
+echo.
+echo  [D] View Details for an Option (Shows what changes will be made)
+echo  [A] Apply Selected Optimizations
+echo  [R] Reset All Selections
+echo  [X] Exit
+echo.
+echo  Currently selected: %SELECTED_COUNT% optimizations
+echo.
+set /p choice="Enter your choice: "
+
+if "%choice%"=="1" goto menu_tcp_options
+if "%choice%"=="2" goto menu_conn_options
+if "%choice%"=="3" goto menu_dns_memory_options
+if "%choice%"=="4" goto menu_security_options
+if "%choice%"=="5" goto menu_gaming_options
+if "%choice%"=="6" goto menu_all_options
+if "%choice%"=="7" call :toggle_option CREATE_RESTORE
+if "%choice%"=="8" call :toggle_option BACKUP_SETTINGS
+if "%choice%"=="9" call :toggle_option HEALTH_REPORT
+if "%choice%"=="10" goto view_settings
+if "%choice%"=="11" goto clean_logs
+if /i "%choice%"=="D" goto show_details
+if /i "%choice%"=="A" goto apply_changes
+if /i "%choice%"=="R" call :reset_options
+if /i "%choice%"=="X" goto exit_script
+goto main_menu
+
+:menu_tcp_options
+cls
+echo ================================================================
+echo    TCP/IP PROTOCOL STACK OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "TCP Stack Optimization" TCP_OPTIMIZE "Improves TCP packet handling and latency"
+call :show_option "2" "UDP Optimization" UDP_OPTIMIZE "Enhances UDP performance for gaming/streaming"
+call :show_option "3" "QoS Packet Scheduler" QOS_OPTIMIZE "Controls bandwidth allocation and priorities"
+call :show_option "4" "IPv4/IPv6 Stack Configuration" IPV_SETTINGS "Optimizes IP configuration"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p tcp_choice="Enter your choice: "
+
+if "%tcp_choice%"=="1" call :toggle_option TCP_OPTIMIZE
+if "%tcp_choice%"=="2" call :toggle_option UDP_OPTIMIZE
+if "%tcp_choice%"=="3" call :toggle_option QOS_OPTIMIZE
+if "%tcp_choice%"=="4" call :toggle_option IPV_SETTINGS
+if /i "%tcp_choice%"=="D" call :show_tcp_details
+if /i "%tcp_choice%"=="M" goto main_menu
+goto menu_tcp_options
+
+:menu_conn_options
+cls
+echo ================================================================
+echo    CONNECTION TYPE-SPECIFIC OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Auto-Detect and Optimize Connection Type" CONN_TYPE_OPTIMIZE "Applies optimizations based on WiFi/Ethernet/Fiber"
+call :show_option "2" "Network Adapter Power Settings" ADAPTER_POWER "Prevents power-saving from reducing network speed"
+call :show_option "3" "SMB File Sharing Optimization" SMB_OPTIMIZE "Improves file transfer speed on networks"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p conn_choice="Enter your choice: "
+
+if "%conn_choice%"=="1" call :toggle_option CONN_TYPE_OPTIMIZE
+if "%conn_choice%"=="2" call :toggle_option ADAPTER_POWER
+if "%conn_choice%"=="3" call :toggle_option SMB_OPTIMIZE
+if /i "%conn_choice%"=="D" call :show_conn_details
+if /i "%conn_choice%"=="M" goto main_menu
+goto menu_conn_options
+
+:menu_dns_memory_options
+cls
+echo ================================================================
+echo    DNS AND MEMORY MANAGEMENT OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "DNS Cache Optimization" DNS_OPTIMIZE "Improves web browsing speed with better DNS caching"
+call :show_option "2" "Network Memory Management" MEM_OPTIMIZE "Increases available connections and reduces delays"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p dns_choice="Enter your choice: "
+
+if "%dns_choice%"=="1" call :toggle_option DNS_OPTIMIZE
+if "%dns_choice%"=="2" call :toggle_option MEM_OPTIMIZE
+if /i "%dns_choice%"=="D" call :show_dns_mem_details
+if /i "%dns_choice%"=="M" goto main_menu
+goto menu_dns_memory_options
+
+:menu_security_options
+cls
+echo ================================================================
+echo    NETWORK SECURITY OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Network Security Settings" SEC_OPTIMIZE "Configures firewall and secures vulnerable ports"
+call :show_option "2" "Network Maintenance" NET_MAINTENANCE "Resets components and flushes caches"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p sec_choice="Enter your choice: "
+
+if "%sec_choice%"=="1" call :toggle_option SEC_OPTIMIZE
+if "%sec_choice%"=="2" call :toggle_option NET_MAINTENANCE
+if /i "%sec_choice%"=="D" call :show_security_details
+if /i "%sec_choice%"=="M" goto main_menu
+goto menu_security_options
+
+:menu_gaming_options
+cls
+echo ================================================================
+echo    GAMING AND STREAMING OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Gaming Mode Optimization" GAME_OPTIMIZE "Prioritizes network traffic for games"
+call :show_option "2" "Streaming Mode Optimization" STREAM_OPTIMIZE "Optimizes for streaming services and video calls"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p game_choice="Enter your choice: "
+
+if "%game_choice%"=="1" call :toggle_option GAME_OPTIMIZE
+if "%game_choice%"=="2" call :toggle_option STREAM_OPTIMIZE
+if /i "%game_choice%"=="D" call :show_gaming_details
+if /i "%game_choice%"=="M" goto main_menu
+goto menu_gaming_options
+
+:menu_all_options
+cls
+echo ================================================================
+echo    ALL AVAILABLE OPTIMIZATIONS
+echo ================================================================
+echo.
+echo  NETWORK PROTOCOL OPTIMIZATIONS:
+call :show_option "1" "TCP Stack Optimization" TCP_OPTIMIZE "Improves TCP packet handling and latency"
+call :show_option "2" "UDP Optimization" UDP_OPTIMIZE "Enhances UDP performance for gaming/streaming"
+call :show_option "3" "QoS Packet Scheduler" QOS_OPTIMIZE "Controls bandwidth allocation and priorities"
+call :show_option "4" "IPv4/IPv6 Stack Configuration" IPV_SETTINGS "Optimizes IP configuration"
+echo.
+echo  CONNECTION-SPECIFIC OPTIMIZATIONS:
+call :show_option "5" "Auto-Detect and Optimize Connection Type" CONN_TYPE_OPTIMIZE "Applies optimizations based on WiFi/Ethernet/Fiber"
+call :show_option "6" "Network Adapter Power Settings" ADAPTER_POWER "Prevents power-saving from reducing network speed"
+call :show_option "7" "SMB File Sharing Optimization" SMB_OPTIMIZE "Improves file transfer speed on networks"
+echo.
+echo  PERFORMANCE OPTIMIZATIONS:
+call :show_option "8" "DNS Cache Optimization" DNS_OPTIMIZE "Improves web browsing speed with better DNS caching"
+call :show_option "9" "Network Memory Management" MEM_OPTIMIZE "Increases available connections and reduces delays"
+call :show_option "10" "Gaming Mode Optimization" GAME_OPTIMIZE "Prioritizes network traffic for games"
+call :show_option "11" "Streaming Mode Optimization" STREAM_OPTIMIZE "Optimizes for streaming services and video calls"
+echo.
+echo  SECURITY AND MAINTENANCE:
+call :show_option "12" "Network Security Settings" SEC_OPTIMIZE "Configures firewall and secures vulnerable ports"
+call :show_option "13" "Network Maintenance" NET_MAINTENANCE "Resets components and flushes caches"
+echo.
+echo  ADDITIONAL OPTIONS:
+call :show_option "14" "Create System Restore Point" CREATE_RESTORE "Safety measure before making changes"
+call :show_option "15" "Backup Current Settings" BACKUP_SETTINGS "Creates registry backup of network settings"
+call :show_option "16" "Generate Network Health Report" HEALTH_REPORT "Creates before/after comparison of changes"
+echo.
+set /p all_choice="Enter option number to toggle (or M for Main Menu): "
+
+if "%all_choice%"=="1" call :toggle_option TCP_OPTIMIZE
+if "%all_choice%"=="2" call :toggle_option UDP_OPTIMIZE
+if "%all_choice%"=="3" call :toggle_option QOS_OPTIMIZE
+if "%all_choice%"=="4" call :toggle_option IPV_SETTINGS
+if "%all_choice%"=="5" call :toggle_option CONN_TYPE_OPTIMIZE
+if "%all_choice%"=="6" call :toggle_option ADAPTER_POWER
+if "%all_choice%"=="7" call :toggle_option SMB_OPTIMIZE
+if "%all_choice%"=="8" call :toggle_option DNS_OPTIMIZE
+if "%all_choice%"=="9" call :toggle_option MEM_OPTIMIZE
+if "%all_choice%"=="10" call :toggle_option GAME_OPTIMIZE
+if "%all_choice%"=="11" call :toggle_option STREAM_OPTIMIZE
+if "%all_choice%"=="12" call :toggle_option SEC_OPTIMIZE
+if "%all_choice%"=="13" call :toggle_option NET_MAINTENANCE
+if "%all_choice%"=="14" call :toggle_option CREATE_RESTORE
+if "%all_choice%"=="15" call :toggle_option BACKUP_SETTINGS
+if "%all_choice%"=="16" call :toggle_option HEALTH_REPORT
+if /i "%all_choice%"=="M" goto main_menu
+goto menu_all_options
+
+:: Show Details Function
+:show_details
 cls
 echo ==================================================
-echo   Windows Network Performance Optimizer v%VERSION%
+echo  VIEW OPTIMIZATION DETAILS
 echo ==================================================
 echo.
-echo Select options to apply (Use Y/N to toggle):
-echo --------------------------------------------------
-echo [Basic Optimizations]
-call :show_option "1" "Create System Restore Point" CREATE_RESTORE
-call :show_option "2" "Create Registry Backup" BACKUP_SETTINGS
+echo  Select a category to see what changes will be applied:
 echo.
-echo [Network Protocol Optimizations]
-call :show_option "3" "TCP Optimization" TCP_OPTIMIZE
-call :show_option "4" "UDP Optimization" UDP_OPTIMIZE
-call :show_option "5" "DNS Cache Optimization" DNS_OPTIMIZE
-call :show_option "6" "Network Adapter Power Settings" ADAPTER_POWER
+echo  1. TCP/IP Protocol Stack Optimizations
+echo  2. Connection Type-Specific Optimizations (WiFi/Ethernet/Fiber)
+echo  3. DNS and Memory Management Optimizations
+echo  4. Security and Maintenance Settings
+echo  5. Gaming and Streaming Optimizations
+echo  6. Tools and Utilities
 echo.
-echo [Advanced Optimizations]
-call :show_option "7" "SMB Performance Settings" SMB_OPTIMIZE
-call :show_option "8" "QoS Optimization" QOS_OPTIMIZE
-call :show_option "9" "IPv4/IPv6 Settings" IPV_SETTINGS
+echo  0. Return to Main Menu
 echo.
-echo [Additional Optimizations]
-call :show_option "10" "Network Interface Tuning" NIC_TUNE
-call :show_option "11" "Network Memory Management" MEM_OPTIMIZE
-call :show_option "12" "Network Security Settings" SEC_OPTIMIZE
-call :show_option "13" "Gaming Mode Optimization" GAME_OPTIMIZE
-call :show_option "14" "Streaming Mode Optimization" STREAM_OPTIMIZE
-call :show_option "15" "Network Maintenance" NET_MAINTENANCE
-call :show_option "16" "Bandwidth Management" BANDWIDTH_MANAGE
-call :show_option "17" "Connection Type Optimization" CONN_TYPE_OPTIMIZE
-call :show_option "18" "Network Health Report" HEALTH_REPORT
-echo --------------------------------------------------
-echo A. Apply Selected Optimizations
-echo V. View Current Network Settings
-echo R. Reset All Options
-echo C. Clean Log Files
-echo X. Exit
-echo.
-set /p "choice=Enter your choice: "
+set /p "detail_choice=Enter option number to view details: "
 
-if /i "%choice%"=="1" call :toggle_option CREATE_RESTORE & goto menu
-if /i "%choice%"=="2" call :toggle_option BACKUP_SETTINGS & goto menu
-if /i "%choice%"=="3" call :toggle_option TCP_OPTIMIZE & goto menu
-if /i "%choice%"=="4" call :toggle_option UDP_OPTIMIZE & goto menu
-if /i "%choice%"=="5" call :toggle_option DNS_OPTIMIZE & goto menu
-if /i "%choice%"=="6" call :toggle_option ADAPTER_POWER & goto menu
-if /i "%choice%"=="7" call :toggle_option SMB_OPTIMIZE & goto menu
-if /i "%choice%"=="8" call :toggle_option QOS_OPTIMIZE & goto menu
-if /i "%choice%"=="9" call :toggle_option IPV_SETTINGS & goto menu
-if /i "%choice%"=="10" call :toggle_option NIC_TUNE & goto menu
-if /i "%choice%"=="11" call :toggle_option MEM_OPTIMIZE & goto menu
-if /i "%choice%"=="12" call :toggle_option SEC_OPTIMIZE & goto menu
-if /i "%choice%"=="13" call :toggle_option GAME_OPTIMIZE & goto menu
-if /i "%choice%"=="14" call :toggle_option STREAM_OPTIMIZE & goto menu
-if /i "%choice%"=="15" call :toggle_option NET_MAINTENANCE & goto menu
-if /i "%choice%"=="16" call :toggle_option BANDWIDTH_MANAGE & goto menu
-if /i "%choice%"=="17" call :toggle_option CONN_TYPE_OPTIMIZE & goto menu
-if /i "%choice%"=="18" call :toggle_option HEALTH_REPORT & goto menu
-if /i "%choice%"=="a" goto apply_changes
-if /i "%choice%"=="v" goto view_settings
-if /i "%choice%"=="r" goto reset_options
-if /i "%choice%"=="c" goto clean_logs
-if /i "%choice%"=="x" exit /b 0
-goto menu
+if "%detail_choice%"=="0" goto main_menu
+if "%detail_choice%"=="1" call :show_tcp_details
+if "%detail_choice%"=="2" call :show_conn_details
+if "%detail_choice%"=="3" call :show_dns_mem_details
+if "%detail_choice%"=="4" call :show_security_details
+if "%detail_choice%"=="5" call :show_gaming_details
+if "%detail_choice%"=="6" call :show_tools_details
+goto show_details
+
+:show_tcp_details
+cls
+echo ==================================================
+echo  TCP/IP PROTOCOL STACK OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo TCP STACK OPTIMIZATION:
+echo ----------------------
+echo Registry changes:
+echo - Tcp1323Opts = 1 (Enables TCP Window Scaling)
+echo - TCPNoDelay = 1 (Disables Nagle's Algorithm)
+echo - TcpAckFrequency = 1 (Improves latency)
+echo - DefaultTTL = 64 (Optimizes Time-To-Live value)
+echo.
+echo Benefits:
+echo - Reduces latency in interactive applications
+echo - Improves throughput for large data transfers
+echo - Optimizes packet handling for modern networks
+echo - Improved responsiveness for online gaming and video conferencing
+echo.
+echo UDP OPTIMIZATION:
+echo ---------------
+echo Registry changes:
+echo - FastSendDatagramThreshold = 1000
+echo - FastCopyReceiveThreshold = 1000  
+echo - DynamicSendBufferDisable = 0 (Enables dynamic buffer allocation)
+echo.
+echo Benefits:
+echo - Improves gaming and streaming applications
+echo - Reduces packet loss during high traffic
+echo - Optimizes buffer handling for UDP traffic
+echo - Better voice chat quality in games and VoIP applications
+echo.
+echo QoS PACKET SCHEDULER:
+echo ------------------
+echo Registry changes:
+echo - NonBestEffortLimit = 0 (Removes bandwidth reservation)
+echo - TimerResolution = 1 (Improves packet scheduling)
+echo - MaxOutstandingSends = 8
+echo.
+echo Benefits:
+echo - Prevents Windows from reserving bandwidth
+echo - Improves packet scheduling efficiency
+echo - Better prioritizes network traffic
+echo.
+echo IPv4/IPv6 STACK CONFIGURATION:
+echo ---------------------------
+echo Registry changes:
+echo - DisabledComponents = 32 (Optimizes IPv6 components)
+echo - EnableICMPRedirect = 0 (Disables ICMP redirects for security)
+echo - EnablePMTUDiscovery = 1 (Enables Path MTU Discovery)
+echo.
+echo Benefits:
+echo - Configures IPv6 for better compatibility
+echo - Improves security by preventing ICMP redirects
+echo - Optimizes packet size for your connection
+echo.
+pause
+goto main_menu
+
+:show_conn_details
+cls
+echo ==================================================
+echo  CONNECTION TYPE-SPECIFIC OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo AUTO-DETECT CONNECTION TYPE:
+echo -------------------------
+echo This feature will:
+echo - Automatically detect if you're on WiFi, Ethernet, or Fiber
+echo - Apply specific optimizations for your connection type:
+echo.
+echo   WiFi optimizations:
+echo   - Configure TCP parameters for wireless stability
+echo   - Set appropriate WiFi power settings
+echo   - Configure TCP Initial RTT for wireless connections
+echo   - Optimize delivery optimization settings
+echo   - Fine-tune buffer settings for wireless interference conditions
+echo.
+echo   Ethernet optimizations:
+echo   - Configure TCP parameters for wired connections
+echo   - Set optimal TCP Initial RTT for Ethernet
+echo   - Adjust buffer settings for more consistent wired performance
+echo.
+echo   Fiber optimizations (for high-speed connections):
+echo   - Set larger TCP window sizes (GlobalMaxTcpWindowSize = 65535)
+echo   - Enable scaling options for gigabit+ connections
+echo   - Optimize for high-bandwidth, low-latency environments
+echo.
+echo NETWORK ADAPTER POWER SETTINGS:
+echo ----------------------------
+echo Registry/Power changes:
+echo - Sets processor performance boost mode to aggressive
+echo - Sets maximum processor performance boost percentage
+echo - Disables Selective Suspend on WiFi adapters
+echo.
+echo Benefits:
+echo - Prevents power-saving features from reducing network speed
+echo - Ensures consistent network performance
+echo - Reduces latency by keeping adapters fully powered
+echo.
+echo SMB FILE SHARING OPTIMIZATION:
+echo --------------------------
+echo Registry changes:
+echo - DisableBandwidthThrottling = 1
+echo - DisableLargeMtu = 0 (Enables Large MTU support)
+echo.
+echo Benefits:
+echo - Allows maximum bandwidth for SMB transfers
+echo - Enables larger packet sizes for better throughput
+echo - Improves local network file transfer speeds
+echo.
+pause
+goto main_menu
+
+:show_dns_mem_details
+cls
+echo ==================================================
+echo  DNS AND MEMORY MANAGEMENT OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo DNS CACHE OPTIMIZATION:
+echo --------------------
+echo Registry changes:
+echo - CacheHashTableBucketSize = 1
+echo - CacheHashTableSize = 384
+echo - DnsCacheTimeout = 86400 (24 hours - keeps successful lookups cached longer)
+echo.
+echo Benefits:
+echo - Caches more DNS entries for faster lookups
+echo - Reduces the time to find cached DNS entries
+echo - Improves overall browsing experience
+echo - Faster website loading on repeat visits
+echo - Reduces DNS lookup delays when gaming or streaming
+echo.
+echo NETWORK MEMORY MANAGEMENT:
+echo -----------------------
+echo Registry changes:
+echo - MaxUserPort = 65534 (Increases maximum TCP ports)
+echo - TcpTimedWaitDelay = 30 (Reduces TIME_WAIT delay)
+echo - MaxFreeTcbs = 65535 (Increases maximum free TCBs)
+echo.
+echo Benefits:
+echo - Allows more simultaneous connections
+echo - Reduces delay before port reuse
+echo - Improves connection handling under high load
+echo - Better handles multiple connections for modern web browsing
+echo.
+pause
+goto main_menu
+
+:show_security_details
+cls
+echo ==================================================
+echo  SECURITY AND MAINTENANCE OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo NETWORK SECURITY SETTINGS:
+echo -----------------------
+echo Actions performed:
+echo - Enables Windows Firewall with secure defaults
+echo - Blocks inbound connections by default
+echo - Scans for and secures vulnerable ports (135, 137, 138, 139, 445, etc.)
+echo - Ensures Base Filtering Engine is running
+echo - Blocks known malicious IP ranges
+echo - Enables SMB signing and encryption
+echo - Disables vulnerable protocols (SMBv1)
+echo - Enables TLS 1.2 and disables older SSL versions
+echo - Disables LLMNR and WPAD for security
+echo - Configures networks as private instead of public for better protection
+echo.
+echo Benefits:
+echo - Protects against unauthorized access
+echo - Secures commonly exploited network ports
+echo - Implements security best practices
+echo - Prevents common network attacks
+echo.
+echo NETWORK MAINTENANCE:
+echo -----------------
+echo Actions performed:
+echo - Flushes DNS cache (ipconfig /flushdns)
+echo - Resets Winsock catalog (netsh winsock reset)
+echo - Resets IP stack (netsh int ip reset)
+echo - Releases and renews IP addresses
+echo - Clears ARP cache
+echo - Resets Internet settings
+echo.
+echo Benefits:
+echo - Resolves common network issues
+echo - Removes outdated or corrupted network settings
+echo - Refreshes all network components
+echo - May fix connectivity problems
+echo.
+pause
+goto main_menu
+
+:show_gaming_details
+cls
+echo ==================================================
+echo  GAMING AND STREAMING OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo GAMING MODE OPTIMIZATION:
+echo ----------------------
+echo Registry changes:
+echo - Games\GPU Priority = 8
+echo - Games\Priority = 6
+echo - Games\Scheduling Category = "High"
+echo - NetworkThrottlingIndex = 4294967295 (Disables throttling)
+echo - SystemResponsiveness = 0 (Prioritizes foreground apps)
+echo - GameDVR_FSEBehavior = 2 (Optimizes full-screen performance)
+echo - GameDVR_Enabled = 0 (Disables Game DVR to reduce overhead)
+echo.
+echo Benefits:
+echo - Reduces network latency in games
+echo - Prioritizes game traffic over background tasks
+echo - Improves responsiveness in online games
+echo - Better ping times and reduced jitter
+echo - Lower input lag and more consistent frame rates
+echo - Optimizes Windows resources for gaming performance
+echo.
+echo STREAMING MODE OPTIMIZATION:
+echo ------------------------
+echo Registry changes:
+echo - TcpAckFrequency = 1 (Immediate acknowledgements)
+echo - TCPNoDelay = 1 (Disables Nagle's Algorithm)
+echo - NetworkThrottlingIndex = 4294967295 (Disables throttling)
+echo - initialRto = 2000 (Optimizes retransmission timeout)
+echo.
+echo Benefits:
+echo - Smoother video streaming with fewer buffering events
+echo - Better audio/video sync in conferencing applications
+echo - Reduced stuttering in live streams
+echo - Improved quality for services like Netflix, YouTube, Zoom
+echo.
+pause
+goto main_menu
+
+:show_tools_details
+cls
+echo ==================================================
+echo  TOOLS AND UTILITIES DETAILS
+echo ==================================================
+echo.
+echo CREATE SYSTEM RESTORE POINT:
+echo ------------------------
+echo Actions performed:
+echo - Creates a System Restore Point named "Network Optimization"
+echo - Allows you to revert all changes if needed
+echo.
+echo Benefits:
+echo - Provides a safety net before making system changes
+echo - Allows easy rollback if optimizations cause issues
+echo - Recommended before applying any system-wide changes
+echo.
+echo BACKUP CURRENT SETTINGS:
+echo ---------------------
+echo Actions performed:
+echo - Exports current TCP/IP registry settings
+echo - Saves the backup in the Network Tools directory
+echo - Creates a timestamped backup file (.reg format)
+echo.
+echo Benefits:
+echo - Creates a manual restore option via registry file
+echo - More targeted than System Restore for network settings
+echo - Provides a way to selectively restore settings
+echo.
+echo GENERATE NETWORK HEALTH REPORT:
+echo ---------------------------
+echo Actions performed:
+echo - Captures network statistics before optimization
+echo - Records TCP/IP configuration and parameters
+echo - Logs network interface information
+echo - Captures DNS cache status
+echo - Creates a detailed report after optimization
+echo - Generates a complete HTML report comparing results
+echo.
+echo Benefits:
+echo - Documents the impact of optimizations
+echo - Provides a before/after comparison
+echo - Creates a record of all changes made
+echo - Helps identify if optimizations improved performance
+echo.
+pause
+goto main_menu
 
 :show_option
 if not defined %3 set "%3=N"
-echo [%~1] %~2: [!%3!]
+set "SELECTED="
+if "!%3!"=="Y" set "SELECTED=[X]" & call :count_selected
+if "!%3!"=="N" set "SELECTED=[ ]"
+echo  %SELECTED% %~1. %~2
+if not "%~4"=="" echo     - %~4
+exit /b
+
+:count_selected
+set /a SELECTED_COUNT+=0
+if not defined SELECTED_COUNT set "SELECTED_COUNT=0"
+if "!%3!"=="Y" set /a SELECTED_COUNT+=1
 exit /b
 
 :toggle_option
 if "%1"=="" exit /b
 if "!%1!"=="Y" (
     set "%1=N"
+    set /a SELECTED_COUNT-=1
 ) else (
     set "%1=Y"
+    set /a SELECTED_COUNT+=1
 )
 exit /b
 
 :reset_options
+set "SELECTED_COUNT=0"
 set "CREATE_RESTORE=N"
 set "BACKUP_SETTINGS=N"
 set "TCP_OPTIMIZE=N"
@@ -114,16 +587,15 @@ set "ADAPTER_POWER=N"
 set "SMB_OPTIMIZE=N"
 set "QOS_OPTIMIZE=N"
 set "IPV_SETTINGS=N"
-set "NIC_TUNE=N"
 set "MEM_OPTIMIZE=N"
 set "SEC_OPTIMIZE=N"
 set "GAME_OPTIMIZE=N"
 set "STREAM_OPTIMIZE=N"
 set "NET_MAINTENANCE=N"
-set "BANDWIDTH_MANAGE=N"
 set "CONN_TYPE_OPTIMIZE=N"
 set "HEALTH_REPORT=N"
-goto menu
+if "%~1"=="" goto main_menu
+exit /b
 
 :view_settings
 cls
@@ -141,7 +613,7 @@ echo DNS Settings:
 ipconfig /displaydns | findstr "Record Name"
 echo.
 pause
-goto menu
+goto main_menu
 
 :apply_changes
 cls
@@ -313,23 +785,174 @@ if "%IPV_SETTINGS%"=="Y" (
 )
 
 :: Apply Network Interface Tuning if selected
-if "%NIC_TUNE%"=="Y" (
+if "%CONN_TYPE_OPTIMIZE%"=="Y" (
     echo.
-    echo Applying Network Interface Tuning...
-    call :log "Applying Network Interface Tuning..."
-    netsh int tcp set global congestionprovider=ctcp >nul
-    netsh int tcp set global autotuninglevel=normal >nul
-    netsh int tcp set global ecncapability=enabled >nul
-    netsh int tcp set global timestamps=disabled >nul
-    :: MTU optimization
-    netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
-    netsh interface ipv4 set subinterface "Wi-Fi" mtu=1500 store=persistent >nul 2>&1
-    :: Network adapter offloading optimization
-    powershell -Command "Get-NetAdapter -Physical | ForEach-Object { Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*LsoV2IPv4' -RegistryValue 1 -NoRestart }" >nul 2>&1
-    powershell -Command "Get-NetAdapter -Physical | ForEach-Object { Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*TcpChecksumOffloadIPv4' -RegistryValue 1 -NoRestart }" >nul 2>&1
-    echo [OK] Network Interface Tuning applied
+    echo Applying Connection Type Optimization...
+    call :log "Applying Connection Type Optimization..."
+    
+    :: Detect connection type using multiple methods
+    echo -- Detecting connection type...
+    
+    :: Create temporary files for connection detection
+    set "CONN_DETECT_FILE=%TEMP%\connection_type.txt"
+    set "NETSH_OUTPUT=%TEMP%\netsh_output.txt"
+    
+    :: Method 1: Use PowerShell to get interface information
+    echo -- Method 1: PowerShell network adapter detection
+    powershell -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object Name, InterfaceDescription, LinkSpeed, Status | Format-Table -AutoSize > '%CONN_DETECT_FILE%'" 2>nul
+    
+    :: Method 2: Use netsh as backup
+    echo -- Method 2: Using netsh for interface detection
+    netsh interface show interface > "%NETSH_OUTPUT%" 2>nul
+    
+    :: Initialize connection type
+    set "CONN_TYPE=Unknown"
+    set "INTERFACE_NAME="
+    
+    :: Check if detection files exist and have content
+    if exist "%CONN_DETECT_FILE%" (
+        :: Debug output the content of detection file
+        echo -- Debug: Network adapter information found:
+        type "%CONN_DETECT_FILE%"
+        echo.
+        
+        :: Look for WiFi/Wireless keywords
+        findstr /i "Wi-Fi Wireless WLAN" "%CONN_DETECT_FILE%" >nul 2>&1
+        if !errorlevel! equ 0 (
+            set "CONN_TYPE=WiFi"
+            for /f "tokens=1" %%a in ('findstr /i "Wi-Fi Wireless WLAN" "%CONN_DETECT_FILE%"') do (
+                if not defined INTERFACE_NAME set "INTERFACE_NAME=%%a"
+            )
+        ) else (
+            :: Look for Ethernet keywords
+            findstr /i "Ethernet Local" "%CONN_DETECT_FILE%" >nul 2>&1
+            if !errorlevel! equ 0 (
+                set "CONN_TYPE=Ethernet"
+                for /f "tokens=1" %%a in ('findstr /i "Ethernet Local" "%CONN_DETECT_FILE%"') do (
+                    if not defined INTERFACE_NAME set "INTERFACE_NAME=%%a"
+                )
+                
+                :: Check for fiber based on speed (usually 1Gbps or higher)
+                findstr /i "Gbps" "%CONN_DETECT_FILE%" >nul 2>&1
+                if !errorlevel! equ 0 (
+                    set "CONN_TYPE=Fiber"
+                )
+            )
+        )
+    )
+    
+    :: If still unknown, try netsh method
+    if "!CONN_TYPE!"=="Unknown" if exist "%NETSH_OUTPUT%" (
+        echo -- Attempting detection via netsh output
+        type "%NETSH_OUTPUT%"
+        echo.
+        
+        findstr /i "Wi-Fi Wireless" "%NETSH_OUTPUT%" >nul 2>&1
+        if !errorlevel! equ 0 (
+            set "CONN_TYPE=WiFi"
+            for /f "tokens=*" %%a in ('findstr /i "Connected" "%NETSH_OUTPUT%" ^| findstr /i "Wi-Fi Wireless"') do (
+                for /f "tokens=1" %%b in ("%%a") do set "INTERFACE_NAME=%%b"
+            )
+        ) else (
+            findstr /i "Ethernet Local" "%NETSH_OUTPUT%" >nul 2>&1
+            if !errorlevel! equ 0 (
+                set "CONN_TYPE=Ethernet"
+                for /f "tokens=*" %%a in ('findstr /i "Connected" "%NETSH_OUTPUT%" ^| findstr /i "Ethernet Local"') do (
+                    for /f "tokens=1" %%b in ("%%a") do set "INTERFACE_NAME=%%b"
+                )
+            )
+        )
+    )
+    
+    :: Final attempt - check active connections
+    if "!CONN_TYPE!"=="Unknown" (
+        echo -- Final detection attempt using ipconfig
+        ipconfig | findstr /i "Wireless Wi-Fi" >nul 2>&1
+        if !errorlevel! equ 0 set "CONN_TYPE=WiFi"
+        
+        if "!CONN_TYPE!"=="Unknown" (
+            ipconfig | findstr /i "Ethernet" >nul 2>&1
+            if !errorlevel! equ 0 set "CONN_TYPE=Ethernet"
+        )
+    )
+    
+    echo -- Detected connection type: !CONN_TYPE!
+    if defined INTERFACE_NAME echo -- Network interface: !INTERFACE_NAME!
+    call :log "Detected connection type: !CONN_TYPE!"
+    if defined INTERFACE_NAME call :log "Network interface: !INTERFACE_NAME!"
+    
+    :: Apply optimizations based on connection type
+    if "!CONN_TYPE!"=="WiFi" (
+        echo -- Applying WiFi-specific optimizations...
+        
+        :: Verify netsh wlan is available
+        netsh wlan show interfaces >nul 2>&1
+        if !errorlevel! equ 0 (
+            :: Get the actual interface name if needed
+            if not defined INTERFACE_NAME (
+                for /f "tokens=2 delims=:" %%a in ('netsh wlan show interfaces ^| findstr /i "Name"') do (
+                    set "INTERFACE_NAME=%%a"
+                    set "INTERFACE_NAME=!INTERFACE_NAME:~1!"
+                )
+            )
+            
+            if defined INTERFACE_NAME (
+                echo -- Using WiFi interface: !INTERFACE_NAME!
+                netsh wlan set autoconfig enabled=yes interface="!INTERFACE_NAME!" >nul 2>&1
+            ) else (
+                echo -- WiFi interface name not found, applying general WiFi settings
+            )
+        )
+        
+        :: Apply WiFi-specific optimizations
+        echo -- Setting WiFi optimized registry values
+        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DODownloadMode" /t REG_DWORD /d 1 /f >nul 2>&1
+        
+        :: Buffer tuning for WiFi
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 3 /f >nul 2>&1
+        
+        :: Power management settings for WiFi
+        powershell -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Set-NetAdapterPowerManagement -SelectiveSuspend Disabled" >nul 2>&1
+    )
+    
+    if "!CONN_TYPE!"=="Ethernet" (
+        echo -- Applying Ethernet-specific optimizations...
+        
+        :: Apply Ethernet-specific optimizations
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 2 /f >nul 2>&1
+    )
+    
+    if "!CONN_TYPE!"=="Fiber" (
+        echo -- Applying Fiber-specific optimizations...
+        
+        :: Buffer tuning for high-bandwidth connections
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "GlobalMaxTcpWindowSize" /t REG_DWORD /d 65535 /f >nul 2>&1
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul 2>&1
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul 2>&1
+    )
+    
+    :: Apply general optimizations regardless of connection type
+    echo -- Applying general network optimizations for all connection types...
+    
+    :: TCP Optimizations
+    netsh int tcp set global congestionprovider=ctcp >nul 2>&1
+    netsh int tcp set global autotuninglevel=normal >nul 2>&1
+    
+    :: Disable nagle's algorithm for better responsiveness
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul 2>&1
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul 2>&1
+    
+    :: Set useful TTL
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "DefaultTTL" /t REG_DWORD /d 64 /f >nul 2>&1
+    
+    :: Clean up temp files
+    if exist "%CONN_DETECT_FILE%" del "%CONN_DETECT_FILE%" >nul 2>&1
+    if exist "%NETSH_OUTPUT%" del "%NETSH_OUTPUT%" >nul 2>&1
+    
+    echo [OK] Connection Type Optimization applied for !CONN_TYPE!
 )
 
+:: Apply Advanced Settings if needed
 :: Apply Memory Management Optimizations if selected
 if "%MEM_OPTIMIZE%"=="Y" (
     echo.
@@ -495,126 +1118,6 @@ if "%NET_MAINTENANCE%"=="Y" (
     echo [OK] Network Maintenance completed
 )
 
-:: Apply Bandwidth Management if selected
-if "%BANDWIDTH_MANAGE%"=="Y" (
-    echo.
-    echo Applying Bandwidth Management...
-    call :log "Applying Bandwidth Management..."
-    
-    :: Configure QoS packet scheduler
-    echo -- Configuring QoS packet scheduling...
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "TimerResolution" /t REG_DWORD /d 1 /f >nul
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "NonBestEffortLimit" /t REG_DWORD /d 20 /f >nul
-    
-    :: Limit background transfer service bandwidth
-    echo -- Limiting background app bandwidth...
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\BITS" /v "EnableBITSMaxBandwidth" /t REG_DWORD /d 1 /f >nul
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\BITS" /v "MaxBandwidthVal" /t REG_DWORD /d 40 /f >nul
-    
-    :: Configure throttling values for Windows Update
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DODownloadMode" /t REG_DWORD /d 1 /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DOMaxDownloadBandwidth" /t REG_DWORD /d 10485760 /f >nul
-    
-    :: Prioritize Gaming and Media traffic
-    echo -- Prioritizing multimedia applications...
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 70 /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Affinity" /t REG_DWORD /d 0 /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d "False" /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f >nul
-    
-    :: Block common bandwidth-heavy apps from using too much bandwidth (modify for your needs)
-    echo -- Creating firewall rules for bandwidth management...
-    netsh advfirewall firewall add rule name="Limit OneDrive Bandwidth" program="%LOCALAPPDATA%\Microsoft\OneDrive\OneDrive.exe" action=allow dir=out enable=yes profile=any remoteport=443 protocol=TCP >nul 2>&1
-    
-    echo [OK] Bandwidth Management applied
-)
-
-:: Apply Connection Type Optimization if selected
-if "%CONN_TYPE_OPTIMIZE%"=="Y" (
-    echo.
-    echo Applying Connection Type Optimization...
-    call :log "Applying Connection Type Optimization..."
-    
-    :: Detect connection type
-    echo -- Detecting connection type...
-    
-    :: Create temporary file for connection detection
-    set "CONN_DETECT_FILE=%TEMP%\connection_type.txt"
-    
-    :: Use PowerShell to get interface information
-    powershell -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object Name, InterfaceDescription, LinkSpeed | Format-Table -AutoSize > '%CONN_DETECT_FILE%'" >nul 2>&1
-    
-    :: Look for connection types
-    set "CONN_TYPE=Unknown"
-    findstr /i "Wi-Fi Wireless" "%CONN_DETECT_FILE%" >nul 2>&1
-    if !errorlevel! equ 0 set "CONN_TYPE=WiFi"
-    
-    findstr /i "Ethernet" "%CONN_DETECT_FILE%" >nul 2>&1
-    if !errorlevel! equ 0 set "CONN_TYPE=Ethernet"
-    
-    :: Check for fiber based on speed (usually 1Gbps or higher)
-    findstr /i "Gbps" "%CONN_DETECT_FILE%" >nul 2>&1
-    if !errorlevel! equ 0 (
-        findstr /i "Ethernet" "%CONN_DETECT_FILE%" >nul 2>&1
-        if !errorlevel! equ 0 set "CONN_TYPE=Fiber"
-    )
-    
-    echo -- Detected connection type: !CONN_TYPE!
-    call :log "Detected connection type: !CONN_TYPE!"
-    
-    :: Apply optimizations based on connection type
-    if "!CONN_TYPE!"=="WiFi" (
-        echo -- Applying WiFi-specific optimizations...
-        
-        :: Wi-Fi specific optimizations
-        netsh wlan set autoconfig enabled=yes interface="Wi-Fi" >nul 2>&1
-        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DODownloadMode" /t REG_DWORD /d 1 /f >nul
-        
-        :: Adjust MTU for WiFi
-        netsh interface ipv4 set subinterface "Wi-Fi" mtu=1472 store=persistent >nul 2>&1
-        
-        :: Disable background scanning while connected
-        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WiFi\Interfaces" /v "AutoScanEnabled" /t REG_DWORD /d 0 /f >nul 2>&1
-        
-        :: Buffer tuning for WiFi
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 3 /f >nul
-    )
-    
-    if "!CONN_TYPE!"=="Ethernet" (
-        echo -- Applying Ethernet-specific optimizations...
-        
-        :: Ethernet specific optimizations
-        netsh interface tcp set global congestionprovider=ctcp >nul
-        
-        :: Adjust MTU for regular Ethernet
-        netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
-        
-        :: Better buffer settings for Ethernet
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 2 /f >nul
-    )
-    
-    if "!CONN_TYPE!"=="Fiber" (
-        echo -- Applying Fiber-specific optimizations...
-        
-        :: Fiber specific optimizations
-        netsh interface tcp set global congestionprovider=ctcp >nul
-        netsh interface tcp set global autotuninglevel=normal >nul
-        netsh interface tcp set global chimney=disabled >nul
-        
-        :: Large MTU for Fiber
-        netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
-        
-        :: Buffer tuning for high-bandwidth connections
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "GlobalMaxTcpWindowSize" /t REG_DWORD /d 65535 /f >nul
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul
-    )
-    
-    echo [OK] Connection Type Optimization applied for !CONN_TYPE!
-)
-
 :: Generate the Network Health Report if selected
 if "%HEALTH_REPORT%"=="Y" (
     echo.
@@ -680,7 +1183,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^<table^> >> "!HTML_REPORT!"
     echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
     
-    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE BANDWIDTH_MANAGE CONN_TYPE_OPTIMIZE) do (
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE) do (
         if "!%%i!"=="Y" (
             echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
         ) else (
@@ -727,7 +1230,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE BANDWIDTH_MANAGE CONN_TYPE_OPTIMIZE HEALTH_REPORT) do (
+for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE HEALTH_REPORT) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
@@ -803,3 +1306,11 @@ echo %* >> "%LOG_PATH%"
 exit /b 0
 
 endlocal
+
+:exit_script
+cls
+echo.
+echo Thank you for using Windows Network Performance Optimizer v%VERSION%
+echo The script will now exit.
+echo.
+exit
