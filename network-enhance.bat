@@ -4,7 +4,7 @@ chcp 65001 >nul
 color 0A
 
 :: Script Version
-set "VERSION=2.0"
+set "VERSION=2.1"
 
 :: Initialize logging
 set "LOG_PATH=%USERPROFILE%\Desktop\NetworkOptimizer_Log_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
@@ -27,14 +27,27 @@ echo ==================================================
 echo.
 echo Select options to apply (Use Y/N to toggle):
 echo --------------------------------------------------
+echo [Basic Optimizations]
 call :show_option "1" "Create System Restore Point" CREATE_RESTORE
 call :show_option "2" "Create Registry Backup" BACKUP_SETTINGS
+echo.
+echo [Network Protocol Optimizations]
 call :show_option "3" "TCP Optimization" TCP_OPTIMIZE
-call :show_option "4" "DNS Cache Optimization" DNS_OPTIMIZE
-call :show_option "5" "Network Adapter Power Settings" ADAPTER_POWER
-call :show_option "6" "SMB Performance Settings" SMB_OPTIMIZE
-call :show_option "7" "QoS Optimization" QOS_OPTIMIZE
-call :show_option "8" "IPv4/IPv6 Settings" IPV_SETTINGS
+call :show_option "4" "UDP Optimization" UDP_OPTIMIZE
+call :show_option "5" "DNS Cache Optimization" DNS_OPTIMIZE
+call :show_option "6" "Network Adapter Power Settings" ADAPTER_POWER
+echo.
+echo [Advanced Optimizations]
+call :show_option "7" "SMB Performance Settings" SMB_OPTIMIZE
+call :show_option "8" "QoS Optimization" QOS_OPTIMIZE
+call :show_option "9" "IPv4/IPv6 Settings" IPV_SETTINGS
+echo.
+echo [Additional Optimizations]
+call :show_option "10" "Network Interface Tuning" NIC_TUNE
+call :show_option "11" "Network Memory Management" MEM_OPTIMIZE
+call :show_option "12" "Network Security Settings" SEC_OPTIMIZE
+call :show_option "13" "Gaming Mode Optimization" GAME_OPTIMIZE
+call :show_option "14" "Streaming Mode Optimization" STREAM_OPTIMIZE
 echo --------------------------------------------------
 echo A. Apply Selected Optimizations
 echo V. View Current Network Settings
@@ -46,11 +59,17 @@ set /p "choice=Enter your choice: "
 if /i "%choice%"=="1" call :toggle_option CREATE_RESTORE & goto menu
 if /i "%choice%"=="2" call :toggle_option BACKUP_SETTINGS & goto menu
 if /i "%choice%"=="3" call :toggle_option TCP_OPTIMIZE & goto menu
-if /i "%choice%"=="4" call :toggle_option DNS_OPTIMIZE & goto menu
-if /i "%choice%"=="5" call :toggle_option ADAPTER_POWER & goto menu
-if /i "%choice%"=="6" call :toggle_option SMB_OPTIMIZE & goto menu
-if /i "%choice%"=="7" call :toggle_option QOS_OPTIMIZE & goto menu
-if /i "%choice%"=="8" call :toggle_option IPV_SETTINGS & goto menu
+if /i "%choice%"=="4" call :toggle_option UDP_OPTIMIZE & goto menu
+if /i "%choice%"=="5" call :toggle_option DNS_OPTIMIZE & goto menu
+if /i "%choice%"=="6" call :toggle_option ADAPTER_POWER & goto menu
+if /i "%choice%"=="7" call :toggle_option SMB_OPTIMIZE & goto menu
+if /i "%choice%"=="8" call :toggle_option QOS_OPTIMIZE & goto menu
+if /i "%choice%"=="9" call :toggle_option IPV_SETTINGS & goto menu
+if /i "%choice%"=="10" call :toggle_option NIC_TUNE & goto menu
+if /i "%choice%"=="11" call :toggle_option MEM_OPTIMIZE & goto menu
+if /i "%choice%"=="12" call :toggle_option SEC_OPTIMIZE & goto menu
+if /i "%choice%"=="13" call :toggle_option GAME_OPTIMIZE & goto menu
+if /i "%choice%"=="14" call :toggle_option STREAM_OPTIMIZE & goto menu
 if /i "%choice%"=="a" goto apply_changes
 if /i "%choice%"=="v" goto view_settings
 if /i "%choice%"=="r" goto reset_options
@@ -158,6 +177,17 @@ if "%TCP_OPTIMIZE%"=="Y" (
     echo [OK] TCP Optimizations applied
 )
 
+:: Apply UDP Optimizations if selected
+if "%UDP_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying UDP Optimizations...
+    call :log "Applying UDP Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastSendDatagramThreshold" /t REG_DWORD /d 1000 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastCopyReceiveThreshold" /t REG_DWORD /d 1000 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "DynamicSendBufferDisable" /t REG_DWORD /d 0 /f >nul
+    echo [OK] UDP Optimizations applied
+)
+
 :: Apply DNS Cache Optimizations if selected
 if "%DNS_OPTIMIZE%"=="Y" (
     echo.
@@ -207,6 +237,65 @@ if "%IPV_SETTINGS%"=="Y" (
     echo [OK] IP Settings configured
 )
 
+:: Apply Network Interface Tuning if selected
+if "%NIC_TUNE%"=="Y" (
+    echo.
+    echo Applying Network Interface Tuning...
+    call :log "Applying Network Interface Tuning..."
+    netsh int tcp set global congestionprovider=ctcp >nul
+    netsh int tcp set global autotuninglevel=normal >nul
+    netsh int tcp set global ecncapability=enabled >nul
+    netsh int tcp set global timestamps=disabled >nul
+    echo [OK] Network Interface Tuning applied
+)
+
+:: Apply Memory Management Optimizations if selected
+if "%MEM_OPTIMIZE%"=="Y" (
+    echo.
+    echo Optimizing Network Memory Management...
+    call :log "Applying Memory Management Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "MaxUserPort" /t REG_DWORD /d 65534 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpTimedWaitDelay" /t REG_DWORD /d 30 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "MaxFreeTcbs" /t REG_DWORD /d 65535 /f >nul
+    echo [OK] Memory Management Optimizations applied
+)
+
+:: Apply Network Security Settings if selected
+if "%SEC_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying Network Security Optimizations...
+    call :log "Applying Network Security Optimizations..."
+    netsh advfirewall set allprofiles state on >nul
+    netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\BFE" /v "Start" /t REG_DWORD /d 2 /f >nul
+    echo [OK] Network Security Optimizations applied
+)
+
+:: Apply Gaming Mode Optimizations if selected
+if "%GAME_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying Gaming Mode Optimizations...
+    call :log "Applying Gaming Mode Optimizations..."
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d "High" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f >nul
+    echo [OK] Gaming Mode Optimizations applied
+)
+
+:: Apply Streaming Mode Optimizations if selected
+if "%STREAM_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying Streaming Mode Optimizations...
+    call :log "Applying Streaming Mode Optimizations..."
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
+    netsh int tcp set global initialRto=2000 >nul
+    echo [OK] Streaming Mode Optimizations applied
+)
+
 :: Verify and finalize changes
 echo.
 echo Verifying changes...
@@ -214,7 +303,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS) do (
+for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
