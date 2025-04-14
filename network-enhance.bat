@@ -4,7 +4,7 @@ chcp 65001 >nul
 color 0A
 
 :: Script Version
-set "VERSION=2.2"
+set "VERSION=2.3"
 
 :: Initialize logging
 set "NETWORK_DIR=%USERPROFILE%\Documents\Networks"
@@ -51,6 +51,9 @@ call :show_option "12" "Network Security Settings" SEC_OPTIMIZE
 call :show_option "13" "Gaming Mode Optimization" GAME_OPTIMIZE
 call :show_option "14" "Streaming Mode Optimization" STREAM_OPTIMIZE
 call :show_option "15" "Network Maintenance" NET_MAINTENANCE
+call :show_option "16" "Bandwidth Management" BANDWIDTH_MANAGE
+call :show_option "17" "Connection Type Optimization" CONN_TYPE_OPTIMIZE
+call :show_option "18" "Network Health Report" HEALTH_REPORT
 echo --------------------------------------------------
 echo A. Apply Selected Optimizations
 echo V. View Current Network Settings
@@ -74,6 +77,9 @@ if /i "%choice%"=="12" call :toggle_option SEC_OPTIMIZE & goto menu
 if /i "%choice%"=="13" call :toggle_option GAME_OPTIMIZE & goto menu
 if /i "%choice%"=="14" call :toggle_option STREAM_OPTIMIZE & goto menu
 if /i "%choice%"=="15" call :toggle_option NET_MAINTENANCE & goto menu
+if /i "%choice%"=="16" call :toggle_option BANDWIDTH_MANAGE & goto menu
+if /i "%choice%"=="17" call :toggle_option CONN_TYPE_OPTIMIZE & goto menu
+if /i "%choice%"=="18" call :toggle_option HEALTH_REPORT & goto menu
 if /i "%choice%"=="a" goto apply_changes
 if /i "%choice%"=="v" goto view_settings
 if /i "%choice%"=="r" goto reset_options
@@ -110,6 +116,9 @@ set "SEC_OPTIMIZE=N"
 set "GAME_OPTIMIZE=N"
 set "STREAM_OPTIMIZE=N"
 set "NET_MAINTENANCE=N"
+set "BANDWIDTH_MANAGE=N"
+set "CONN_TYPE_OPTIMIZE=N"
+set "HEALTH_REPORT=N"
 goto menu
 
 :view_settings
@@ -141,6 +150,45 @@ echo.
 echo Windows Network Performance Optimizer v%VERSION% > "%LOG_PATH%"
 echo Optimization started at: %date% %time% >> "%LOG_PATH%"
 echo. >> "%LOG_PATH%"
+
+:: Capture network health data before changes if health report is selected
+if "%HEALTH_REPORT%"=="Y" (
+    echo Capturing network baseline statistics...
+    call :log "Capturing network baseline statistics..."
+    
+    set "HEALTH_DATA_PATH=%NETWORK_DIR%\NetworkHealth_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.txt"
+    set "HEALTH_DATA_PATH=!HEALTH_DATA_PATH: =0!"
+    
+    echo Network Health Report - BEFORE Optimization > "!HEALTH_DATA_PATH!"
+    echo Date: %date% Time: %time% >> "!HEALTH_DATA_PATH!"
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo TCP/IP Configuration: >> "!HEALTH_DATA_PATH!"
+    ipconfig /all >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Network Statistics: >> "!HEALTH_DATA_PATH!"
+    netstat -s >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Network Interface Statistics: >> "!HEALTH_DATA_PATH!"
+    netsh interface ipv4 show interfaces >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo TCP Global Parameters: >> "!HEALTH_DATA_PATH!"
+    netsh interface tcp show global >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Current Network Connections: >> "!HEALTH_DATA_PATH!"
+    netstat -ano >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo DNS Cache: >> "!HEALTH_DATA_PATH!"
+    ipconfig /displaydns | findstr "Record Name" >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo [OK] Network baseline captured
+)
 
 :: Create System Restore Point if selected
 if "%CREATE_RESTORE%"=="Y" (
@@ -443,6 +491,231 @@ if "%NET_MAINTENANCE%"=="Y" (
     echo [OK] Network Maintenance completed
 )
 
+:: Apply Bandwidth Management if selected
+if "%BANDWIDTH_MANAGE%"=="Y" (
+    echo.
+    echo Applying Bandwidth Management...
+    call :log "Applying Bandwidth Management..."
+    
+    :: Configure QoS packet scheduler
+    echo -- Configuring QoS packet scheduling...
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "TimerResolution" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v "NonBestEffortLimit" /t REG_DWORD /d 20 /f >nul
+    
+    :: Limit background transfer service bandwidth
+    echo -- Limiting background app bandwidth...
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\BITS" /v "EnableBITSMaxBandwidth" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\BITS" /v "MaxBandwidthVal" /t REG_DWORD /d 40 /f >nul
+    
+    :: Configure throttling values for Windows Update
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DODownloadMode" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DOMaxDownloadBandwidth" /t REG_DWORD /d 10485760 /f >nul
+    
+    :: Prioritize Gaming and Media traffic
+    echo -- Prioritizing multimedia applications...
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 70 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Affinity" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d "False" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f >nul
+    
+    :: Block common bandwidth-heavy apps from using too much bandwidth (modify for your needs)
+    echo -- Creating firewall rules for bandwidth management...
+    netsh advfirewall firewall add rule name="Limit OneDrive Bandwidth" program="%LOCALAPPDATA%\Microsoft\OneDrive\OneDrive.exe" action=allow dir=out enable=yes profile=any remoteport=443 protocol=TCP >nul 2>&1
+    
+    echo [OK] Bandwidth Management applied
+)
+
+:: Apply Connection Type Optimization if selected
+if "%CONN_TYPE_OPTIMIZE%"=="Y" (
+    echo.
+    echo Applying Connection Type Optimization...
+    call :log "Applying Connection Type Optimization..."
+    
+    :: Detect connection type
+    echo -- Detecting connection type...
+    
+    :: Create temporary file for connection detection
+    set "CONN_DETECT_FILE=%TEMP%\connection_type.txt"
+    
+    :: Use PowerShell to get interface information
+    powershell -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object Name, InterfaceDescription, LinkSpeed | Format-Table -AutoSize > '%CONN_DETECT_FILE%'" >nul 2>&1
+    
+    :: Look for connection types
+    set "CONN_TYPE=Unknown"
+    findstr /i "Wi-Fi Wireless" "%CONN_DETECT_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 set "CONN_TYPE=WiFi"
+    
+    findstr /i "Ethernet" "%CONN_DETECT_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 set "CONN_TYPE=Ethernet"
+    
+    :: Check for fiber based on speed (usually 1Gbps or higher)
+    findstr /i "Gbps" "%CONN_DETECT_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        findstr /i "Ethernet" "%CONN_DETECT_FILE%" >nul 2>&1
+        if !errorlevel! equ 0 set "CONN_TYPE=Fiber"
+    )
+    
+    echo -- Detected connection type: !CONN_TYPE!
+    call :log "Detected connection type: !CONN_TYPE!"
+    
+    :: Apply optimizations based on connection type
+    if "!CONN_TYPE!"=="WiFi" (
+        echo -- Applying WiFi-specific optimizations...
+        
+        :: Wi-Fi specific optimizations
+        netsh wlan set autoconfig enabled=yes interface="Wi-Fi" >nul 2>&1
+        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v "DODownloadMode" /t REG_DWORD /d 1 /f >nul
+        
+        :: Adjust MTU for WiFi
+        netsh interface ipv4 set subinterface "Wi-Fi" mtu=1472 store=persistent >nul 2>&1
+        
+        :: Disable background scanning while connected
+        reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WiFi\Interfaces" /v "AutoScanEnabled" /t REG_DWORD /d 0 /f >nul 2>&1
+        
+        :: Buffer tuning for WiFi
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 3 /f >nul
+    )
+    
+    if "!CONN_TYPE!"=="Ethernet" (
+        echo -- Applying Ethernet-specific optimizations...
+        
+        :: Ethernet specific optimizations
+        netsh interface tcp set global congestionprovider=ctcp >nul
+        
+        :: Adjust MTU for regular Ethernet
+        netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
+        
+        :: Better buffer settings for Ethernet
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpInitialRTT" /t REG_DWORD /d 2 /f >nul
+    )
+    
+    if "!CONN_TYPE!"=="Fiber" (
+        echo -- Applying Fiber-specific optimizations...
+        
+        :: Fiber specific optimizations
+        netsh interface tcp set global congestionprovider=ctcp >nul
+        netsh interface tcp set global autotuninglevel=normal >nul
+        netsh interface tcp set global chimney=disabled >nul
+        
+        :: Large MTU for Fiber
+        netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent >nul 2>&1
+        
+        :: Buffer tuning for high-bandwidth connections
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "GlobalMaxTcpWindowSize" /t REG_DWORD /d 65535 /f >nul
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul
+    )
+    
+    echo [OK] Connection Type Optimization applied for !CONN_TYPE!
+)
+
+:: Generate the Network Health Report if selected
+if "%HEALTH_REPORT%"=="Y" (
+    echo.
+    echo Generating Network Health Report...
+    call :log "Generating Network Health Report..."
+    
+    :: Append 'AFTER' data to the health report
+    echo. >> "!HEALTH_DATA_PATH!"
+    echo ========================================================== >> "!HEALTH_DATA_PATH!"
+    echo Network Health Report - AFTER Optimization >> "!HEALTH_DATA_PATH!"
+    echo Date: %date% Time: %time% >> "!HEALTH_DATA_PATH!"
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo TCP/IP Configuration: >> "!HEALTH_DATA_PATH!"
+    ipconfig /all >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Network Statistics: >> "!HEALTH_DATA_PATH!"
+    netstat -s >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Network Interface Statistics: >> "!HEALTH_DATA_PATH!"
+    netsh interface ipv4 show interfaces >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo TCP Global Parameters: >> "!HEALTH_DATA_PATH!"
+    netsh interface tcp show global >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo Current Network Connections: >> "!HEALTH_DATA_PATH!"
+    netstat -ano >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    echo DNS Cache: >> "!HEALTH_DATA_PATH!"
+    ipconfig /displaydns | findstr "Record Name" >> "!HEALTH_DATA_PATH!" 2>&1
+    echo. >> "!HEALTH_DATA_PATH!"
+    
+    :: Create a simple HTML report for better visualization
+    set "HTML_REPORT=%NETWORK_DIR%\NetworkReport_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.html"
+    set "HTML_REPORT=!HTML_REPORT: =0!"
+    
+    echo ^<!DOCTYPE html^> > "!HTML_REPORT!"
+    echo ^<html^> >> "!HTML_REPORT!"
+    echo ^<head^> >> "!HTML_REPORT!"
+    echo ^<title^>Network Optimization Report^</title^> >> "!HTML_REPORT!"
+    echo ^<style^> >> "!HTML_REPORT!"
+    echo body { font-family: Arial, sans-serif; margin: 20px; } >> "!HTML_REPORT!"
+    echo h1, h2 { color: #0066cc; } >> "!HTML_REPORT!"
+    echo .container { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; } >> "!HTML_REPORT!"
+    echo .success { color: green; } >> "!HTML_REPORT!"
+    echo table { border-collapse: collapse; width: 100%%; } >> "!HTML_REPORT!"
+    echo th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } >> "!HTML_REPORT!"
+    echo th { background-color: #f2f2f2; } >> "!HTML_REPORT!"
+    echo ^</style^> >> "!HTML_REPORT!"
+    echo ^</head^> >> "!HTML_REPORT!"
+    echo ^<body^> >> "!HTML_REPORT!"
+    
+    echo ^<h1^>Network Optimization Report^</h1^> >> "!HTML_REPORT!"
+    echo ^<p^>Generated on: %date% at %time%^</p^> >> "!HTML_REPORT!"
+    
+    echo ^<div class="container"^> >> "!HTML_REPORT!"
+    echo ^<h2^>Optimizations Applied^</h2^> >> "!HTML_REPORT!"
+    echo ^<table^> >> "!HTML_REPORT!"
+    echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
+    
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE BANDWIDTH_MANAGE CONN_TYPE_OPTIMIZE) do (
+        if "!%%i!"=="Y" (
+            echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
+        ) else (
+            echo ^<tr^>^<td^>%%i^</td^>^<td^>Not Applied^</td^>^</tr^> >> "!HTML_REPORT!"
+        )
+    )
+    
+    echo ^</table^> >> "!HTML_REPORT!"
+    echo ^</div^> >> "!HTML_REPORT!"
+    
+    echo ^<div class="container"^> >> "!HTML_REPORT!"
+    echo ^<h2^>Connection Information^</h2^> >> "!HTML_REPORT!"
+    
+    if "%CONN_TYPE_OPTIMIZE%"=="Y" (
+        echo ^<p^>Detected Connection Type: ^<strong^>!CONN_TYPE!^</strong^>^</p^> >> "!HTML_REPORT!"
+    ) else (
+        echo ^<p^>Connection type detection was not run.^</p^> >> "!HTML_REPORT!"
+    )
+    
+    echo ^<p^>For detailed network information, please see the raw data file at: !HEALTH_DATA_PATH!^</p^> >> "!HTML_REPORT!"
+    echo ^</div^> >> "!HTML_REPORT!"
+    
+    echo ^<div class="container"^> >> "!HTML_REPORT!"
+    echo ^<h2^>Recommendations^</h2^> >> "!HTML_REPORT!"
+    echo ^<ul^> >> "!HTML_REPORT!"
+    echo ^<li^>Restart your computer to apply all changes^</li^> >> "!HTML_REPORT!"
+    echo ^<li^>Run the Network Health Report periodically to monitor performance^</li^> >> "!HTML_REPORT!"
+    echo ^<li^>Consider adjusting specific settings based on your usage patterns^</li^> >> "!HTML_REPORT!"
+    echo ^</ul^> >> "!HTML_REPORT!"
+    echo ^</div^> >> "!HTML_REPORT!"
+    
+    echo ^</body^> >> "!HTML_REPORT!"
+    echo ^</html^> >> "!HTML_REPORT!"
+    
+    echo [OK] Network Health Report generated
+    echo -- Report saved to: !HTML_REPORT!
+    call :log "Network Health Report generated at !HTML_REPORT!"
+)
+
 :: Verify and finalize changes
 echo.
 echo Verifying changes...
@@ -450,7 +723,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE) do (
+for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS UDP_OPTIMIZE NIC_TUNE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE BANDWIDTH_MANAGE CONN_TYPE_OPTIMIZE HEALTH_REPORT) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
