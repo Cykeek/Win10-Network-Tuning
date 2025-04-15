@@ -1184,7 +1184,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^<table^> >> "!HTML_REPORT!"
     echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
     
-    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE) do (
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE HEALTH_REPORT) do (
         if "!%%i!"=="Y" (
             echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
         ) else (
@@ -1230,7 +1230,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE HEALTH_REPORT) do (
+for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE HEALTH_REPORT) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
@@ -1243,24 +1243,13 @@ if "%CHANGES_MADE%"=="Y" (
     echo Important Notes:
     echo 1. Log file created at: %LOG_PATH%
     if "%BACKUP_SETTINGS%"=="Y" echo 2. Registry backup at: %BACKUP_PATH%
-    echo 3. A system restart is required to apply all changes.
+    echo 3. A system restart is recommended to fully apply all changes.
     echo.
-    echo Would you like to restart now? (Y/N)
-    set /p "restart_choice="
-    if /i "!restart_choice!"=="y" (
-        echo.
-        echo System will restart in 60 seconds to apply changes.
-        echo Close any open applications before restart.
-        shutdown /r /t 60 /c "Network optimizations will be applied after restart."
-        exit /b 0
-    ) else (
-        echo.
-        echo Please remember to restart your computer later to apply the changes.
-        echo.
-        echo Press any key to return to menu...
-        pause >nul
-        goto menu
-    )
+    echo Please restart your computer at your earliest convenience.
+    echo.
+    echo Press any key to return to menu...
+    pause >nul
+    goto main_menu
 ) else (
     echo.
     echo No optimizations were selected.
@@ -1268,7 +1257,7 @@ if "%CHANGES_MADE%"=="Y" (
     echo.
     echo Press any key to return to menu...
     pause >nul
-    goto menu
+    goto main_menu
 )
 
 :clean_logs
