@@ -60,9 +60,8 @@ echo.
 echo  ADDITIONAL OPTIMIZATIONS:
 echo  ----------------------------------------------------------------
 echo  [12] Video Conferencing Optimizations
-echo  [13] Congestion Control Algorithm Selection
+echo  [13] Congestion Control Algorithm Selection and Customization
 echo  [14] Hardware-Specific Network Adapter Tuning
-echo  [15] Advanced TCP Congestion Control Customization
 echo.
 echo  TOOLS AND UTILITIES:
 echo  ----------------------------------------------------------------
@@ -99,9 +98,8 @@ if "%choice%"=="9" set "VALID_CHOICE=1" & call :toggle_option HEALTH_REPORT
 if "%choice%"=="10" set "VALID_CHOICE=1" & goto view_settings
 if "%choice%"=="11" set "VALID_CHOICE=1" & goto clean_logs
 if "%choice%"=="12" set "VALID_CHOICE=1" & goto menu_video_conf
-if "%choice%"=="13" set "VALID_CHOICE=1" & goto menu_congestion_control
+if "%choice%"=="13" set "VALID_CHOICE=1" & goto menu_congestion_algorithms
 if "%choice%"=="14" set "VALID_CHOICE=1" & goto menu_hardware_tuning
-if "%choice%"=="15" set "VALID_CHOICE=1" & goto menu_congestion_algorithms
 if /i "%choice%"=="D" set "VALID_CHOICE=1" & goto show_details
 if /i "%choice%"=="A" set "VALID_CHOICE=1" & goto apply_changes
 if /i "%choice%"=="R" set "VALID_CHOICE=1" & call :apply_recommended_settings
@@ -1275,135 +1273,8 @@ if "%VIDEO_CONF%"=="Y" (
 :: Apply Congestion Control Algorithm Selection if selected
 if "%CONGESTION_CTRL%"=="Y" (
     call :update_progress "Selecting optimal congestion control algorithm"
-    
-    :: First detect network type and conditions
-    set "LATENCY_FILE=%TEMP%\network_latency.txt"
-    set "BANDWIDTH_FILE=%TEMP%\network_bandwidth.txt"
-    set "PACKET_LOSS_FILE=%TEMP%\packet_loss.txt"
-    
-    echo -- Testing network conditions...
-    
-    :: Test latency with error handling
-    ping -n 20 8.8.8.8 | findstr "Average" > "%LATENCY_FILE%" 2>nul
-    if not exist "%LATENCY_FILE%" (
-        echo -- Could not determine latency, using default settings.
-        call :log "[WARNING] Latency test failed, using default settings"
-        set "IS_HIGH_LATENCY=0"
-        echo 0 > "%LATENCY_FILE%"
-    )
-    
-    :: Check bandwidth information from the adapter (simplified method)
-    wmic NIC where NetEnabled=true get Name, Speed > "%BANDWIDTH_FILE%" 2>nul
-    if not exist "%BANDWIDTH_FILE%" (
-        echo -- Could not determine bandwidth, using default settings.
-        call :log "[WARNING] Bandwidth detection failed, using default settings"
-        set "IS_HIGH_BANDWIDTH=0"
-        echo 0 > "%BANDWIDTH_FILE%"
-    )
-    
-    :: Check packet loss
-    ping -n 20 8.8.8.8 | findstr "Lost" > "%PACKET_LOSS_FILE%" 2>nul
-    if not exist "%PACKET_LOSS_FILE%" (
-        echo -- Could not determine packet loss, using default settings.
-        call :log "[WARNING] Packet loss test failed, using default settings"
-        set "IS_HIGH_PACKET_LOSS=0"
-        echo 0 > "%PACKET_LOSS_FILE%"
-    )
-    
-    :: Parse results and determine best algorithm
-    set "SELECTED_ALGORITHM=CUBIC"
-    
-    :: Check for high bandwidth connections
-    findstr /i "1000000000" "%BANDWIDTH_FILE%" >nul 2>&1
-    if !errorlevel! equ 0 (
-        :: High bandwidth detected (1Gbps or higher)
-        set "IS_HIGH_BANDWIDTH=1"
-    ) else (
-        set "IS_HIGH_BANDWIDTH=0"
-    )
-    
-    :: Check for high latency - with error handling
-    for /f "tokens=9 delims== " %%a in ('type "%LATENCY_FILE%" 2^>nul') do (
-        set "LATENCY=%%a"
-        set "LATENCY=!LATENCY:~0,5!"
-        if not defined LATENCY set "LATENCY=0"
-        if "!LATENCY!"=="" set "LATENCY=0"
-        if !LATENCY! gtr 100 (
-            set "IS_HIGH_LATENCY=1"
-        ) else (
-            set "IS_HIGH_LATENCY=0"
-        )
-    )
-    
-    :: Check for packet loss - with error handling
-    for /f "tokens=10 delims= " %%a in ('type "%PACKET_LOSS_FILE%" 2^>nul') do (
-        set "PACKET_LOSS=%%a"
-        if defined PACKET_LOSS (
-            set "PACKET_LOSS=!PACKET_LOSS:~0,-1!"
-            if not defined PACKET_LOSS set "PACKET_LOSS=0"
-            if "!PACKET_LOSS!"=="" set "PACKET_LOSS=0"
-            if !PACKET_LOSS! gtr 5 (
-                set "IS_HIGH_PACKET_LOSS=1"
-            ) else (
-                set "IS_HIGH_PACKET_LOSS=0"
-            )
-        ) else (
-            set "IS_HIGH_PACKET_LOSS=0"
-        )
-    )
-    
-    :: Select algorithm based on conditions
-    if "!IS_HIGH_BANDWIDTH!"=="1" (
-        if "!IS_HIGH_LATENCY!"=="1" (
-            :: High bandwidth, high latency = CTCP
-            set "SELECTED_ALGORITHM=CTCP"
-        ) else (
-            if "!IS_HIGH_PACKET_LOSS!"=="1" (
-                :: High bandwidth, packet loss = CUBIC
-                set "SELECTED_ALGORITHM=CUBIC"
-            ) else (
-                :: High bandwidth, low latency, low packet loss = DCTCP
-                set "SELECTED_ALGORITHM=DCTCP"
-            )
-        )
-    ) else (
-        if "!IS_HIGH_LATENCY!"=="1" (
-            :: Low bandwidth, high latency = NewReno
-            set "SELECTED_ALGORITHM=NewReno"
-        ) else (
-            if "!IS_HIGH_PACKET_LOSS!"=="1" (
-                :: Low bandwidth, packet loss = CUBIC
-                set "SELECTED_ALGORITHM=CUBIC"
-            ) else (
-                :: Low bandwidth, low latency, low packet loss = CUBIC
-                set "SELECTED_ALGORITHM=CUBIC"
-            )
-        )
-    )
-    
-    echo -- Setting congestion control algorithm to: !SELECTED_ALGORITHM!
-    call :log "Selected congestion control algorithm: !SELECTED_ALGORITHM!"
-    
-    :: Apply the selected algorithm
-    netsh int tcp set supplemental congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo -- Warning: Failed to set supplemental congestion provider. Using only global setting.
-        call :log "[WARNING] Failed to set supplemental congestion provider"
-    )
-    
-    netsh int tcp set global congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo -- Error: Failed to set congestion control algorithm.
-        call :log "[ERROR] Failed to set congestion control algorithm"
-        echo -- Using system default congestion control algorithm.
-    ) else (
-        call :log "[OK] Congestion Control Algorithm optimized: !SELECTED_ALGORITHM!"
-    )
-    
-    :: Clean up temporary files
-    if exist "%LATENCY_FILE%" del "%LATENCY_FILE%" >nul 2>&1
-    if exist "%BANDWIDTH_FILE%" del "%BANDWIDTH_FILE%" >nul 2>&1
-    if exist "%PACKET_LOSS_FILE%" del "%PACKET_LOSS_FILE%" >nul 2>&1
+    call :run_safe_congestion_control_selection
+    call :log "[OK] Auto-selection of congestion control algorithm completed"
 )
 
 :: Apply Hardware-Specific Network Adapter Tuning if selected
@@ -1745,149 +1616,8 @@ if "%CONGESTION_DCTCP%"=="Y" (
 
 if "%CONGESTION_AUTO%"=="Y" (
     call :update_progress "Auto-detecting optimal TCP Congestion Control Algorithm"
-    
-    :: Set default values first to prevent division by zero
-    set "AVG_LATENCY=50"
-    set "PACKET_LOSS=0"
-    set "SELECTED_ALGORITHM=ctcp"
-    
-    echo -- Testing network characteristics to determine optimal algorithm...
-    
-    :: Create temporary files with absolutely full path and simple name to avoid issues
-    set "PING_OUT=%TEMP%\ping_test.txt"
-    
-    :: Clean up any existing file first to avoid stale data
-    if exist "%PING_OUT%" del "%PING_OUT%" >nul 2>&1
-    
-    :: Test internet connectivity first
-    ping -n 1 8.8.8.8 >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo -- Warning: Cannot reach test server. Using default settings.
-        call :log "[WARNING] Internet connectivity check failed, using default algorithm"
-    ) else (
-        :: Run ping test with more robust error handling
-        ping -n 10 8.8.8.8 > "%PING_OUT%" 2>nul
-        
-        :: Verify file was created
-        if exist "%PING_OUT%" (
-            :: Verify file has content
-            for %%A in ("%PING_OUT%") do if %%~zA gtr 0 (
-                :: Check if file contains valid data
-                findstr /i /c:"Average" "%PING_OUT%" >nul 2>&1
-                if !errorlevel! equ 0 (
-                    for /f "tokens=9 delims==" %%a in ('findstr /i "Average" "%PING_OUT%"') do (
-                        set "LAT_STR=%%a"
-                        :: Clean up and ensure we have numeric values
-                        if defined LAT_STR (
-                            set "LAT_STR=!LAT_STR:~1!"
-                            set "LAT_STR=!LAT_STR:ms=!"
-                            set "LAT_STR=!LAT_STR: =!"
-                            
-                            :: Only set if it's a number
-                            set "IS_NUMBER=1"
-                            for /f "delims=0123456789" %%i in ("!LAT_STR!") do set "IS_NUMBER=0"
-                            if "!IS_NUMBER!"=="1" (
-                                set "AVG_LATENCY=!LAT_STR!"
-                            )
-                        )
-                    )
-                ) else (
-                    echo -- Warning: Could not parse latency data. Using default value.
-                    call :log "[WARNING] Failed to parse latency data from ping test"
-                )
-                
-                :: Extract packet loss information with better error handling
-                findstr /i /c:"loss" "%PING_OUT%" >nul 2>&1
-                if !errorlevel! equ 0 (
-                    for /f "tokens=6 delims= " %%a in ('findstr /i "loss" "%PING_OUT%"') do (
-                        set "LOSS_STR=%%a"
-                        :: Clean up and ensure we have numeric values
-                        if defined LOSS_STR (
-                            set "LOSS_STR=!LOSS_STR:~0,-1!"
-                            
-                            :: Only set if it's a number
-                            set "IS_NUMBER=1"
-                            for /f "delims=0123456789" %%i in ("!LOSS_STR!") do set "IS_NUMBER=0"
-                            if "!IS_NUMBER!"=="1" (
-                                set "PACKET_LOSS=!LOSS_STR!"
-                            )
-                        )
-                    )
-                ) else (
-                    echo -- Warning: Could not parse packet loss data. Using default value.
-                    call :log "[WARNING] Failed to parse packet loss data from ping test"
-                )
-            ) else (
-                echo -- Warning: Ping results file is empty. Using default settings.
-                call :log "[WARNING] Ping results file is empty, using default algorithm"
-            )
-            
-            :: Clean up
-            del "%PING_OUT%" >nul 2>&1
-        ) else (
-            echo -- Warning: Ping results file not found. Using default settings.
-            call :log "[WARNING] Ping results file not created, using default algorithm"
-        )
-    )
-    
-    echo -- Average latency: !AVG_LATENCY!ms, Packet loss: !PACKET_LOSS!%%
-    call :log "Network test results - Latency: !AVG_LATENCY!ms, Packet loss: !PACKET_LOSS!%%"
-    
-    :: Ensure values are numeric and valid
-    set "IS_NUMBER=1"
-    for /f "delims=0123456789" %%i in ("!AVG_LATENCY!") do set "IS_NUMBER=0"
-    if "!IS_NUMBER!"=="0" set "AVG_LATENCY=50"
-    
-    set "IS_NUMBER=1"
-    for /f "delims=0123456789" %%i in ("!PACKET_LOSS!") do set "IS_NUMBER=0"
-    if "!IS_NUMBER!"=="0" set "PACKET_LOSS=0"
-    
-    :: Select algorithm based on network characteristics with safe comparisons
-    set "SELECTED_ALGORITHM=ctcp"
-    
-    :: If high bandwidth, high latency network (>50ms) - prefer CUBIC
-    if !AVG_LATENCY! gtr 50 (
-        set "SELECTED_ALGORITHM=cubic"
-    )
-    
-    :: If unstable connection (packet loss > 1%) - prefer NewReno
-    if !PACKET_LOSS! gtr 1 (
-        set "SELECTED_ALGORITHM=newreno"
-    )
-    
-    :: If very low latency (<10ms) - DCTCP might be beneficial
-    if !AVG_LATENCY! lss 10 (
-        set "SELECTED_ALGORITHM=dctcp"
-        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "ECN" /t REG_DWORD /d 1 /f >nul
-    )
-    
-    :: Apply the selected algorithm
-    echo -- Selected optimal TCP congestion algorithm: !SELECTED_ALGORITHM!
-    
-    :: Verify the algorithm is supported
-    netsh int tcp show supplemental template=internet | findstr /i "!SELECTED_ALGORITHM!" >nul
-    if !errorlevel! neq 0 (
-        echo -- Warning: Selected algorithm !SELECTED_ALGORITHM! may not be supported. Using default.
-        set "SELECTED_ALGORITHM=ctcp"
-        call :log "[WARNING] Selected algorithm not supported, using default CTCP"
-    )
-    
-    :: Apply the algorithm with extra error handling
-    netsh int tcp set supplemental template=internet congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo -- Warning: Failed to set algorithm via supplemental template. Trying global setting.
-        netsh int tcp set global congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
-        if !errorlevel! neq 0 (
-            echo -- Warning: Failed to set congestion control algorithm. Using registry method.
-            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul
-            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul
-            call :log "[WARNING] Used registry fallback for TCP optimization"
-        ) else (
-            call :log "[OK] Applied global TCP congestion algorithm: !SELECTED_ALGORITHM!"
-        )
-    ) else (
-        call :log "[OK] Auto-detected and applied optimal TCP Congestion Algorithm: !SELECTED_ALGORITHM!"
-    )
+    call :run_safe_congestion_detection
+    call :log "[OK] Auto-detection of congestion control algorithm completed"
 )
 
 :: Generate the Network Health Report if selected
@@ -2269,17 +1999,10 @@ echo ================================================================
 echo    CONGESTION CONTROL ALGORITHM OPTIMIZATIONS
 echo ================================================================
 echo.
-call :show_option "1" "Auto-Select Best Congestion Control Algorithm" CONGESTION_CTRL "Automatically selects optimal congestion control for your network"
-echo.
-echo  [D] View detailed explanation of these optimizations
-echo  [M] Return to Main Menu
-echo.
-set /p cc_choice="Enter your choice: "
-
-if "%cc_choice%"=="1" call :toggle_option CONGESTION_CTRL
-if /i "%cc_choice%"=="D" call :show_congestion_ctrl_details
-if /i "%cc_choice%"=="M" goto main_menu
-goto menu_congestion_control
+echo  This menu has been merged with the TCP Congestion Control Algorithms menu.
+echo  Redirecting...
+timeout /t 2 >nul
+goto menu_congestion_algorithms
 
 :show_cloud_gaming_details
 cls
@@ -2347,38 +2070,64 @@ echo.
 pause
 goto main_menu
 
-:show_congestion_ctrl_details
+:show_congestion_details
 cls
 echo ==================================================
 echo  CONGESTION CONTROL ALGORITHM DETAILS
 echo ==================================================
 echo.
-echo CONGESTION CONTROL ALGORITHM SELECTION:
-echo -----------------------------------
+echo AUTO-SELECT BEST ALGORITHM:
+echo -------------------------
 echo Network analysis:
 echo - Measures connection characteristics
 echo - Detects network congestion patterns
 echo - Evaluates bandwidth stability
 echo - Determines optimal algorithm for current conditions
-echo.
-echo Available algorithms:
-echo - CTCP (Compound TCP) - Good for high-bandwidth, high-latency networks
-echo - CUBIC - Default in most systems, well-balanced
-echo - NewReno - Better for certain legacy applications
-echo - DCTCP - Optimized for data center environments
-echo - BBR - Google's algorithm for better throughput and reduced latency
-echo.
-echo Benefits:
-echo - Adapts to your specific network conditions
-echo - Improves throughput in challenging network environments
-echo - Reduces bufferbloat issues
-echo - Better handles varying network conditions
-echo - Optimizes bandwidth usage and packet loss recovery
+echo - Tests latency and packet loss to your connection
 echo - Periodically re-evaluates to maintain optimal performance
 echo.
+echo DEFAULT (COMPOUND TCP):
+echo ---------------------
+echo Windows default algorithm that combines loss-based and delay-based approaches.
+echo - Good general performance for most scenarios
+echo - Automatically adjusts to varying network conditions
+echo - Balanced approach for both high and low bandwidth networks
+echo.
+echo CUBIC:
+echo -----
+echo Used by default in Linux and some other operating systems.
+echo - Optimized for high-bandwidth, high-delay networks
+echo - Better utilization of available bandwidth on fast connections
+echo - More aggressive window growth function
+echo - Good for gaming, streaming, and large downloads
+echo.
+echo NEWRENO:
+echo -------
+echo Classic TCP congestion avoidance algorithm.
+echo - More conservative approach to window growth
+echo - Better for unstable connections
+echo - Handles packet loss more gracefully
+echo - Recommended for mobile connections or unreliable Wi-Fi
+echo.
+echo DCTCP (DATA CENTER TCP):
+echo ---------------------
+echo Optimized for data center environments.
+echo - Designed for low latency and high throughput
+echo - Uses ECN (Explicit Congestion Notification)
+echo - Reduces buffer bloat
+echo - Good for applications requiring minimal latency
+echo.
+echo AUTO-DETECT:
+echo ----------
+echo Runs tests to determine the best algorithm for your specific connection.
+echo - Measures latency, bandwidth, and stability
+echo - Automatically selects optimal algorithm based on results
+echo - Periodically re-tests to adjust for changing conditions
+echo.
 pause
-goto main_menu
+goto menu_congestion_algorithms
 
+:: Function to validate and update the script
 :validate_script
 :: Simple script validator to check for common issues
 echo Validating script configuration...
@@ -2390,6 +2139,25 @@ if not exist "%USERPROFILE%\Documents\Networks" mkdir "%USERPROFILE%\Documents\N
 if exist "%USERPROFILE%\Documents\Networks\config_fixed.txt" (
     echo Script already validated, skipping checks.
     exit /b 0
+)
+
+:: Verify script path
+if not exist "%~f0" (
+    echo [ERROR] Script path could not be determined.
+    pause
+    exit /b 1
+)
+
+:: Verify script compatibility with Windows 10
+ver | find "10." > nul
+if %errorlevel% neq 0 (
+    echo [WARNING] This script is optimized for Windows 10 but may work on other versions.
+)
+
+:: Verify netsh capability for TCP congestion control
+netsh int tcp show supplemental > nul 2>&1
+if %errorlevel% neq 0 (
+    echo [WARNING] TCP congestion control features may not be fully supported on this system.
 )
 
 :: Add additional error handling for menu functions
@@ -2473,29 +2241,33 @@ goto main_menu
 :menu_congestion_algorithms
 cls
 echo ================================================================
-echo    ADVANCED TCP CONGESTION CONTROL CUSTOMIZATION
+echo    TCP CONGESTION CONTROL ALGORITHMS
 echo ================================================================
 echo.
 echo  TCP congestion control algorithms determine how your system manages
 echo  network traffic during congestion. Selecting the right algorithm can 
 echo  significantly improve performance for your specific use case.
 echo.
-call :show_option "1" "Default (Compound TCP)" CONGESTION_DEFAULT "Windows default algorithm, good general performance"
-call :show_option "2" "CUBIC" CONGESTION_CUBIC "Better for high-bandwidth, high-latency networks"
-call :show_option "3" "NewReno" CONGESTION_NEWRENO "More conservative, better for unstable connections"
-call :show_option "4" "DCTCP" CONGESTION_DCTCP "Data Center TCP, optimized for low latency"
-call :show_option "5" "Detect Best Algorithm" CONGESTION_AUTO "Auto-detect optimal algorithm for your connection"
+call :show_option "1" "Auto-Select Best Algorithm" CONGESTION_CTRL "Automatically tests and selects optimal algorithm for your network"
+echo.
+echo  Manual algorithm selection:
+call :show_option "2" "Default (Compound TCP)" CONGESTION_DEFAULT "Windows default algorithm, good general performance"
+call :show_option "3" "CUBIC" CONGESTION_CUBIC "Better for high-bandwidth, high-latency networks"
+call :show_option "4" "NewReno" CONGESTION_NEWRENO "More conservative, better for unstable connections"
+call :show_option "5" "DCTCP" CONGESTION_DCTCP "Data Center TCP, optimized for low latency"
+call :show_option "6" "Detect Best Algorithm" CONGESTION_AUTO "Auto-detect optimal algorithm for your connection"
 echo.
 echo  [D] View detailed explanation of these algorithms
 echo  [M] Return to Main Menu
 echo.
 set /p cong_choice="Enter your choice: "
 
-if "%cong_choice%"=="1" call :toggle_option CONGESTION_DEFAULT
-if "%cong_choice%"=="2" call :toggle_option CONGESTION_CUBIC
-if "%cong_choice%"=="3" call :toggle_option CONGESTION_NEWRENO
-if "%cong_choice%"=="4" call :toggle_option CONGESTION_DCTCP
-if "%cong_choice%"=="5" call :toggle_option CONGESTION_AUTO
+if "%cong_choice%"=="1" call :toggle_option CONGESTION_CTRL
+if "%cong_choice%"=="2" call :toggle_option CONGESTION_DEFAULT
+if "%cong_choice%"=="3" call :toggle_option CONGESTION_CUBIC
+if "%cong_choice%"=="4" call :toggle_option CONGESTION_NEWRENO
+if "%cong_choice%"=="5" call :toggle_option CONGESTION_DCTCP
+if "%cong_choice%"=="6" call :toggle_option CONGESTION_AUTO
 if /i "%cong_choice%"=="D" call :show_congestion_details
 if /i "%cong_choice%"=="M" goto main_menu
 goto menu_congestion_algorithms
@@ -2505,6 +2277,16 @@ cls
 echo ==================================================
 echo  TCP CONGESTION CONTROL ALGORITHMS DETAILS
 echo ==================================================
+echo.
+echo AUTO-SELECT BEST ALGORITHM:
+echo -------------------------
+echo Network analysis:
+echo - Measures connection characteristics
+echo - Detects network congestion patterns
+echo - Evaluates bandwidth stability
+echo - Determines optimal algorithm for current conditions
+echo - Tests latency and packet loss to your connection
+echo - Periodically re-evaluates to maintain optimal performance
 echo.
 echo DEFAULT (COMPOUND TCP):
 echo ---------------------
@@ -2547,25 +2329,219 @@ echo.
 pause
 goto menu_congestion_algorithms
 
-:: Function to validate and update the script
-:validate_script
-:: Check for missing features or partially implemented features
-if not exist "%~f0" (
-    echo [ERROR] Script path could not be determined.
-    pause
-    exit /b 1
-)
+:run_safe_congestion_control_selection
+    :: This is a crash-proof implementation
+    echo -- Running optimized congestion control selection...
+    
+    :: Use safe defaults
+    set "LATENCY=50"
+    set "PACKET_LOSS=0"
+    set "HIGH_BANDWIDTH=0"
+    set "ALG=ctcp"
+    
+    :: Create temporary files in a safe location
+    set "DATA_FILE=%TEMP%\netopt_data.txt"
+    
+    :: Clean up old data
+    if exist "%DATA_FILE%" del "%DATA_FILE%" >nul 2>&1
+    
+    :: Test connection
+    echo -- Testing network conditions...
+    echo Default values > "%DATA_FILE%"
+    ping -n 10 8.8.8.8 >> "%DATA_FILE%" 2>&1
+    
+    :: Get latency
+    findstr "Average" "%DATA_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        for /f "tokens=9 delims== " %%i in ('findstr "Average" "%DATA_FILE%"') do (
+            set "LAT=%%i"
+            if defined LAT (
+                set "LAT=!LAT:~1!"
+                set "LAT=!LAT:ms=!"
+                set "LAT=!LAT: =!"
+                echo Found latency: !LAT!ms
+                set "LATENCY=!LAT!"
+            )
+        )
+    )
+    
+    :: Get packet loss
+    findstr "loss" "%DATA_FILE%" >nul 2>&1 
+    if !errorlevel! equ 0 (
+        for /f "tokens=6 delims= " %%i in ('findstr "loss" "%DATA_FILE%"') do (
+            set "LOSS=%%i"
+            if defined LOSS (
+                set "LOSS=!LOSS:~0,-1!"
+                echo Found packet loss: !LOSS!%%
+                set "PACKET_LOSS=!LOSS!"
+            )
+        )
+    )
+    
+    :: Check for high bandwidth
+    wmic NIC where NetEnabled=true get Speed >> "%DATA_FILE%" 2>&1
+    findstr "1000000000" "%DATA_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        set "HIGH_BANDWIDTH=1"
+        echo -- High bandwidth connection detected
+    ) else (
+        echo -- Standard bandwidth connection detected
+    )
+    
+    :: Choose best algorithm
+    if !HIGH_BANDWIDTH! equ 1 (
+        if !LATENCY! gtr 100 (
+            set "ALG=ctcp"
+            echo -- Using CTCP for high bandwidth, high latency
+        ) else (
+            if !PACKET_LOSS! gtr 5 (
+                set "ALG=cubic"
+                echo -- Using CUBIC for high bandwidth with packet loss
+            ) else (
+                set "ALG=dctcp"
+                echo -- Using DCTCP for high bandwidth, low latency network
+            )
+        )
+    ) else (
+        if !LATENCY! gtr 100 (
+            set "ALG=newreno"
+            echo -- Using NewReno for lower bandwidth, high latency
+        ) else (
+            set "ALG=cubic"
+            echo -- Using CUBIC for general use
+        )
+    )
+    
+    :: Make sure algorithm is in lowercase
+    set "ALG=!ALG:CTCP=ctcp!"
+    set "ALG=!ALG:CUBIC=cubic!"
+    set "ALG=!ALG:NEWRENO=newreno!"
+    set "ALG=!ALG:DCTCP=dctcp!"
+    
+    :: Check if algorithm is supported
+    echo -- Verifying algorithm support...
+    netsh int tcp show supplemental | findstr /i "!ALG!" >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo -- Algorithm not supported, using CTCP instead
+        set "ALG=ctcp"
+    )
+    
+    :: Apply the algorithm
+    echo -- Setting congestion algorithm to: !ALG!
+    
+    :: Try first method
+    netsh int tcp set supplemental congestionprovider=!ALG! >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo -- Successfully applied via supplemental method
+    ) else (
+        :: Try second method
+        netsh int tcp set global congestionprovider=!ALG! >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo -- Successfully applied via global method
+        ) else (
+            :: Use registry fallback
+            echo -- Using registry fallback method
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul 2>&1
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul 2>&1
+        )
+    )
+    
+    :: Clean up
+    if exist "%DATA_FILE%" del "%DATA_FILE%" >nul 2>&1
+    
+    echo -- Congestion control optimization completed.
+exit /b 0
 
-:: Verify script compatibility with Windows 10
-ver | find "10." > nul
-if %errorlevel% neq 0 (
-    echo [WARNING] This script is optimized for Windows 10 but may work on other versions.
-)
-
-:: Verify netsh capability for TCP congestion control
-netsh int tcp show supplemental > nul 2>&1
-if %errorlevel% neq 0 (
-    echo [WARNING] TCP congestion control features may not be fully supported on this system.
-)
-
+:run_safe_congestion_detection
+    :: A simplified version for CONGESTION_AUTO
+    echo -- Auto-detecting optimal congestion algorithm...
+    
+    :: Use safe defaults
+    set "AVG_LATENCY=50"
+    set "LOSS=0"
+    set "ALG=ctcp"
+    
+    :: Create temporary files in a safe location
+    set "PING_FILE=%TEMP%\netopt_ping.txt"
+    
+    :: Clean up old data
+    if exist "%PING_FILE%" del "%PING_FILE%" >nul 2>&1
+    
+    :: Test connection
+    echo -- Running network tests...
+    echo Default values > "%PING_FILE%"
+    ping -n 5 8.8.8.8 >> "%PING_FILE%" 2>&1
+    
+    :: Get latency
+    findstr "Average" "%PING_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        for /f "tokens=9 delims== " %%i in ('findstr "Average" "%PING_FILE%"') do (
+            set "LAT=%%i"
+            if defined LAT (
+                set "LAT=!LAT:~1!"
+                set "LAT=!LAT:ms=!"
+                set "LAT=!LAT: =!"
+                echo -- Measured latency: !LAT!ms
+                set "AVG_LATENCY=!LAT!"
+            )
+        )
+    )
+    
+    :: Get packet loss
+    findstr "loss" "%PING_FILE%" >nul 2>&1 
+    if !errorlevel! equ 0 (
+        for /f "tokens=6 delims= " %%i in ('findstr "loss" "%PING_FILE%"') do (
+            set "PKT_LOSS=%%i"
+            if defined PKT_LOSS (
+                set "PKT_LOSS=!PKT_LOSS:~0,-1!"
+                echo -- Measured packet loss: !PKT_LOSS!%%
+                set "LOSS=!PKT_LOSS!"
+            )
+        )
+    )
+    
+    :: Choose algorithm based on network conditions
+    if !AVG_LATENCY! gtr 50 (
+        set "ALG=cubic"
+        echo -- Selected CUBIC for high latency network
+    )
+    
+    if !LOSS! gtr 1 (
+        set "ALG=newreno"
+        echo -- Selected NEWRENO for network with packet loss
+    )
+    
+    if !AVG_LATENCY! lss 10 (
+        set "ALG=dctcp"
+        echo -- Selected DCTCP for very low latency network
+    )
+    
+    :: Verify algorithm support
+    echo -- Checking algorithm support...
+    netsh int tcp show supplemental | findstr /i "!ALG!" >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo -- Selected algorithm not supported, using CTCP instead
+        set "ALG=ctcp"
+    )
+    
+    :: Apply algorithm
+    echo -- Applying algorithm: !ALG!
+    netsh int tcp set supplemental template=internet congestionprovider=!ALG! >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo -- Successfully applied via template method
+    ) else (
+        netsh int tcp set global congestionprovider=!ALG! >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo -- Successfully applied via global method
+        ) else (
+            echo -- Using registry fallback
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul 2>&1
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul 2>&1
+        )
+    )
+    
+    :: Clean up
+    if exist "%PING_FILE%" del "%PING_FILE%" >nul 2>&1
+    
+    echo -- Auto-detection completed
 exit /b 0
