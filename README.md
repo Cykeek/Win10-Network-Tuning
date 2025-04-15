@@ -1,4 +1,3 @@
-
 # Win10-Network-Tuning
 
 A batch script to optimize network settings on Windows 10, enhancing performance through TCP tweaks, DNS cache adjustments, IPv4 prioritization, and disabling SMB packet signing and Windows Update Delivery Optimization.
@@ -10,6 +9,10 @@ A batch script to optimize network settings on Windows 10, enhancing performance
 - **DNS and Memory Management**: Enhances browsing speed with optimized DNS caching
 - **Network Security Settings**: Configures firewall and secures vulnerable ports
 - **Gaming & Streaming Mode**: Prioritizes network traffic for games and streaming services
+- **Video Conferencing Optimizations**: Enhances performance for Zoom, Teams, Meet, and other video conferencing apps
+- **Cloud Gaming Optimizations**: Specific tweaks for GeForce NOW, Xbox Cloud Gaming, and other cloud gaming services
+- **Hardware-Specific Network Adapter Tuning**: Automatically detects adapter model and applies vendor-specific optimizations
+- **Congestion Control Algorithm Selection**: Automatically analyzes network conditions and selects the optimal algorithm
 - **System Protection**: Creates restore points and backups before applying changes
 - **Network Health Reports**: Generates detailed before/after comparison reports
 
@@ -64,6 +67,30 @@ A batch script to optimize network settings on Windows 10, enhancing performance
 - Streaming buffer optimization
 - Reduced buffering for video services
 - Input lag reduction
+
+### Video Conferencing
+- Media foundation priority adjustments
+- Audio/video processing thread priority
+- Buffer management for reduced latency
+- Application-specific optimizations (Zoom, Teams, Meet)
+
+### Cloud Gaming
+- TCP Quick ACK for cloud gaming
+- QoS tagging for cloud gaming services
+- Buffer management for reduced input latency
+- Service-specific optimizations (GeForce NOW, Xbox Cloud Gaming)
+
+### Congestion Control
+- Network conditions analysis
+- Optimal algorithm selection (CTCP, CUBIC, NewReno, DCTCP)
+- Periodic re-evaluation for optimal performance
+- Bandwidth and latency optimization
+
+### Hardware-Specific Tuning
+- Vendor detection (Intel, Realtek, Killer, etc.)
+- Adapter-specific registry optimizations
+- Hardware offloading configuration
+- Jumbo frames for supported adapters
 
 ## Tools and Utilities
 
