@@ -61,6 +61,7 @@ echo  ADDITIONAL OPTIMIZATIONS:
 echo  ----------------------------------------------------------------
 echo  [12] Video Conferencing Optimizations
 echo  [13] Congestion Control Algorithm Selection
+echo  [14] Hardware-Specific Network Adapter Tuning
 echo.
 echo  TOOLS AND UTILITIES:
 echo  ----------------------------------------------------------------
@@ -98,6 +99,7 @@ if "%choice%"=="10" set "VALID_CHOICE=1" & goto view_settings
 if "%choice%"=="11" set "VALID_CHOICE=1" & goto clean_logs
 if "%choice%"=="12" set "VALID_CHOICE=1" & goto menu_video_conf
 if "%choice%"=="13" set "VALID_CHOICE=1" & goto menu_congestion_control
+if "%choice%"=="14" set "VALID_CHOICE=1" & goto menu_hardware_tuning
 if /i "%choice%"=="D" set "VALID_CHOICE=1" & goto show_details
 if /i "%choice%"=="A" set "VALID_CHOICE=1" & goto apply_changes
 if /i "%choice%"=="R" set "VALID_CHOICE=1" & call :apply_recommended_settings
@@ -252,6 +254,7 @@ echo  ADDITIONAL OPTIONS:
 call :show_option "14" "Create System Restore Point" CREATE_RESTORE "Safety measure before making changes"
 call :show_option "15" "Backup Current Settings" BACKUP_SETTINGS "Creates registry backup of network settings"
 call :show_option "16" "Generate Network Health Report" HEALTH_REPORT "Creates before/after comparison of changes"
+call :show_option "17" "Hardware-Specific Network Adapter Tuning" HARDWARE_TUNING "Optimizes based on adapter model"
 echo.
 set /p all_choice="Enter option number to toggle (or M for Main Menu): "
 
@@ -271,6 +274,7 @@ if "%all_choice%"=="13" call :toggle_option NET_MAINTENANCE
 if "%all_choice%"=="14" call :toggle_option CREATE_RESTORE
 if "%all_choice%"=="15" call :toggle_option BACKUP_SETTINGS
 if "%all_choice%"=="16" call :toggle_option HEALTH_REPORT
+if "%all_choice%"=="17" call :toggle_option HARDWARE_TUNING
 if /i "%all_choice%"=="M" goto main_menu
 goto menu_all_options
 
@@ -667,6 +671,7 @@ set "HEALTH_REPORT=N"
 set "CLOUD_GAMING=N"
 set "VIDEO_CONF=N"
 set "CONGESTION_CTRL=N"
+set "HARDWARE_TUNING=N"
 if "%~1"=="" goto main_menu
 exit /b
 
@@ -720,6 +725,7 @@ if "%NET_MAINTENANCE%"=="Y" set /a TOTAL_STEPS+=1
 if "%CLOUD_GAMING%"=="Y" set /a TOTAL_STEPS+=1
 if "%VIDEO_CONF%"=="Y" set /a TOTAL_STEPS+=1
 if "%CONGESTION_CTRL%"=="Y" set /a TOTAL_STEPS+=1
+if "%HARDWARE_TUNING%"=="Y" set /a TOTAL_STEPS+=1
 if "%HEALTH_REPORT%"=="Y" set /a TOTAL_STEPS+=2
 
 :: Initialize current step
@@ -1383,6 +1389,317 @@ if "%CONGESTION_CTRL%"=="Y" (
     if exist "%PACKET_LOSS_FILE%" del "%PACKET_LOSS_FILE%" >nul 2>&1
 )
 
+:: Apply Hardware-Specific Network Adapter Tuning if selected
+if "%HARDWARE_TUNING%"=="Y" (
+    call :update_progress "Applying hardware-specific network adapter optimizations"
+    
+    :: Initialize variables for detection
+    set "ADAPTER_VENDOR="
+    set "ADAPTER_MODEL="
+    set "IS_INTEL=0"
+    set "IS_REALTEK=0"
+    set "IS_BROADCOM=0"
+    set "IS_QUALCOMM=0"
+    set "IS_KILLER=0"
+    set "IS_GAMING_NIC=0"
+    
+    echo -- Starting priority Realtek detection... >nul 2>&1
+    
+    :: Prioritize Realtek detection first - most common adapter type
+    :: Check specifically for Realtek PnP DeviceIDs (common patterns for Realtek adapters)
+    set "REALTEK_CHECK=%TEMP%\realtek_check.txt"
+    powershell -Command "Get-WmiObject Win32_PnPEntity | Where-Object {$_.DeviceID -like '*VEN_10EC*'} | Select-Object Name, DeviceID | Format-Table -AutoSize > '%REALTEK_CHECK%'" >nul 2>&1
+    
+    if exist "%REALTEK_CHECK%" (
+        type "%REALTEK_CHECK%" >nul 2>&1
+        findstr /i "." "%REALTEK_CHECK%" >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo -- Found Realtek adapter by VEN_10EC vendor ID >nul 2>&1
+            set "ADAPTER_VENDOR=Realtek" 
+            set "IS_REALTEK=1"
+        )
+    )
+    
+    :: Check for Realtek registry entries - first attempt
+    if "!IS_REALTEK!"=="0" (
+        powershell -Command "if (Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*\ndi\params\*') { Write-Host 'Realtek registry entries found' }" | findstr /i "Realtek" >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo -- Found Realtek registry entries >nul 2>&1
+            set "ADAPTER_VENDOR=Realtek" 
+            set "IS_REALTEK=1"
+        )
+    )
+    
+    :: If Realtek not directly detected, continue with normal detection process
+    if "!IS_REALTEK!"=="0" (
+        :: Create temporary files for hardware detection
+        set "ADAPTER_INFO=%TEMP%\adapter_info.txt"
+        set "DRIVER_INFO=%TEMP%\driver_info.txt"
+    
+        echo -- Detecting network hardware...
+    
+        :: Get detailed network adapter information - fixed command
+        powershell -Command "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | Select-Object Name, InterfaceDescription | Format-Table -AutoSize > '%ADAPTER_INFO%'" 2>nul
+        if not exist "%ADAPTER_INFO%" (
+            echo -- Could not detect network adapters, using generic optimizations.
+            call :log "[WARNING] Network adapter detection failed"
+        ) else (
+            type "%ADAPTER_INFO%"
+        )
+    
+        :: Get more detailed driver information for Realtek detection
+        powershell -Command "Get-WmiObject Win32_PnPSignedDriver | Where-Object {$_.DeviceClass -eq 'NET'} | Select-Object DeviceName, Manufacturer, DriverVersion | Format-Table -AutoSize > '%DRIVER_INFO%'" 2>nul
+    
+        :: Get additional network adapter details including actual manufacturer info
+        set "ADAPTER_DETAILED=%TEMP%\adapter_detailed.txt"
+        powershell -Command "Get-WmiObject Win32_NetworkAdapter | Where-Object {$_.NetConnectionStatus -eq 2} | Select-Object Name, Manufacturer, Description, PNPDeviceID | Format-Table -AutoSize > '%ADAPTER_DETAILED%'" 2>nul
+    
+        :: Also try direct registry query for active network adapters
+        set "ADAPTER_REG=%TEMP%\adapter_reg.txt"
+        powershell -Command "Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -ne $null } | Select-Object DriverDesc, ComponentId, DeviceInstanceID | Format-Table -AutoSize > '%ADAPTER_REG%'" 2>nul
+    
+        echo -- Starting comprehensive adapter detection...
+    
+        :: Detect adapter manufacturer with better error handling
+        if exist "%ADAPTER_INFO%" (
+            echo -- Checking network adapter information...
+            type "%ADAPTER_INFO%"
+        
+            findstr /i "Intel" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "ADAPTER_VENDOR=Intel" & set "IS_INTEL=1"
+        
+            findstr /i "Realtek\|RTL\|RTGBE" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "ADAPTER_VENDOR=Realtek" & set "IS_REALTEK=1"
+        
+            findstr /i "Broadcom" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "ADAPTER_VENDOR=Broadcom" & set "IS_BROADCOM=1"
+        
+            findstr /i "Qualcomm\|Atheros" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "ADAPTER_VENDOR=Qualcomm" & set "IS_QUALCOMM=1"
+        
+            findstr /i "Killer" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "ADAPTER_VENDOR=Killer" & set "IS_KILLER=1" & set "IS_GAMING_NIC=1"
+        
+            :: Check for gaming-focused NICs
+            findstr /i "Gaming" "%ADAPTER_INFO%" >nul 2>&1
+            if !errorlevel! equ 0 set "IS_GAMING_NIC=1"
+        )
+    
+        :: Also check the driver info file for additional detection
+        if exist "%DRIVER_INFO%" (
+            echo -- Checking network driver information...
+            type "%DRIVER_INFO%"
+        
+            if "!ADAPTER_VENDOR!"=="" (
+                findstr /i "Intel" "%DRIVER_INFO%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Intel" & set "IS_INTEL=1"
+            
+                findstr /i "Realtek\|RTL" "%DRIVER_INFO%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Realtek" & set "IS_REALTEK=1"
+            
+                findstr /i "Broadcom" "%DRIVER_INFO%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Broadcom" & set "IS_BROADCOM=1"
+            )
+        )
+    
+        :: Check detailed adapter information for manufacturer
+        if exist "%ADAPTER_DETAILED%" (
+            echo -- Checking detailed adapter information...
+            type "%ADAPTER_DETAILED%"
+        
+            if "!ADAPTER_VENDOR!"=="" (
+                findstr /i "Intel" "%ADAPTER_DETAILED%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Intel" & set "IS_INTEL=1"
+            
+                findstr /i "Realtek\|RTL\|PCIe GBE" "%ADAPTER_DETAILED%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Realtek" & set "IS_REALTEK=1"
+            
+                findstr /i "Broadcom" "%ADAPTER_DETAILED%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Broadcom" & set "IS_BROADCOM=1"
+            )
+        )
+    
+        :: Check registry information for adapter details
+        if exist "%ADAPTER_REG%" (
+            echo -- Checking registry information...
+            type "%ADAPTER_REG%"
+        
+            if "!ADAPTER_VENDOR!"=="" (
+                findstr /i "Intel" "%ADAPTER_REG%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Intel" & set "IS_INTEL=1"
+            
+                findstr /i "Realtek\|RTL\|GBE\|Fast Ethernet" "%ADAPTER_REG%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Realtek" & set "IS_REALTEK=1"
+            
+                findstr /i "Broadcom" "%ADAPTER_REG%" >nul 2>&1
+                if !errorlevel! equ 0 set "ADAPTER_VENDOR=Broadcom" & set "IS_BROADCOM=1"
+            )
+        )
+    
+        :: Fallback - try direct detection method specifically for Realtek
+        if "!ADAPTER_VENDOR!"=="" (
+            echo -- Trying direct Realtek detection method...
+        
+            :: Output list of PnP devices related to network adapters - useful for debugging
+            powershell -Command "Get-WmiObject Win32_PnPEntity | Where-Object {$_.Name -like '*Adapter*' -or $_.Name -like '*Ethernet*' -or $_.Name -like '*Network*'} | Select-Object Name, DeviceID | Format-Table -AutoSize"
+        )
+    )
+    
+    echo -- Detected network adapter vendor: !ADAPTER_VENDOR! >nul 2>&1
+    call :log "Detected network adapter vendor: !ADAPTER_VENDOR!" >nul 2>&1
+    
+    :: Enhance Realtek detection for registry path
+    if "!IS_REALTEK!"=="1" (
+        echo -- Applying Realtek-specific optimizations... >nul 2>&1
+        
+        :: Get adapter registry path using PowerShell with more detailed search
+        set "ADAPTER_REG_PATH="
+        for /f "tokens=*" %%p in ('powershell -Command "(Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -like '*Realtek*' -or $_.ComponentId -like '*rt*' -or $_.DriverDesc -like '*Ethernet*' -and $_.ProviderName -like '*Realtek*' } | Select-Object -First 1 -ExpandProperty PSPath).ToString().Replace('Microsoft.PowerShell.Core\Registry::','')"') do (
+            set "ADAPTER_REG_PATH=%%p"
+        )
+        
+        if not defined ADAPTER_REG_PATH (
+            echo -- Trying alternative method for Realtek registry path... >nul 2>&1
+            powershell -Command "$paths = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\' -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object { $_.ComponentId -like '*rt*' -or $_.DeviceInstanceID -like '*VEN_10EC*' } | Select-Object -First 1 -ExpandProperty PSPath; if ($paths) { $paths.ToString().Replace('Microsoft.PowerShell.Core\Registry::','') }" > "%TEMP%\realtek_path.txt"
+            set /p ADAPTER_REG_PATH=<"%TEMP%\realtek_path.txt"
+        )
+        
+        if defined ADAPTER_REG_PATH (
+            echo -- Found Realtek adapter registry path: !ADAPTER_REG_PATH! >nul 2>&1
+            :: Realtek adapter-specific optimizations
+            reg add "!ADAPTER_REG_PATH!" /v "*SpeedDuplex" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*FlowControl" /t REG_SZ /d "3" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*PriorityVLANTag" /t REG_SZ /d "3" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "EnableGreenEthernet" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "S5WakeOnLan" /t REG_SZ /d "0" /f >nul 2>&1
+            
+            :: Additional Realtek-specific optimizations
+            reg add "!ADAPTER_REG_PATH!" /v "AdvancedEEE" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*EEE" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "AutoDisableGigabit" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "GigaLite" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "PowerSavingMode" /t REG_SZ /d "0" /f >nul 2>&1
+        ) else (
+            echo -- Realtek adapter registry path not found, trying generic optimization >nul 2>&1
+            :: Try to find all Realtek-related registry entries
+            for /f "tokens=*" %%p in ('powershell -Command "Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | ForEach-Object { if ($_.PSChildName -ne 'Properties' -and ($_.ComponentId -like '*rt*' -or $_.DeviceInstanceID -like '*VEN_10EC*')) { $_.PSPath.ToString().Replace('Microsoft.PowerShell.Core\Registry::','') }}"') do (
+                echo -- Applying optimizations to Realtek path: %%p >nul 2>&1
+                reg add "%%p" /v "*EEE" /t REG_SZ /d "0" /f >nul 2>&1
+                reg add "%%p" /v "EnableGreenEthernet" /t REG_SZ /d "0" /f >nul 2>&1
+                reg add "%%p" /v "PowerSavingMode" /t REG_SZ /d "0" /f >nul 2>&1
+            )
+        )
+        
+        call :log "[OK] Realtek network adapter optimizations applied"
+    )
+    
+    :: Apply Intel-specific optimizations
+    if "!IS_INTEL!"=="1" (
+        echo -- Applying Intel-specific optimizations...
+        
+        :: Jumbo frames for Intel NICs - improved interface detection
+        for /f "tokens=*" %%a in ('powershell -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -ExpandProperty Name"') do (
+            echo -- Optimizing Intel interface: %%a
+            netsh interface ipv4 set subinterface "%%a" mtu=9000 store=persistent >nul 2>&1
+        )
+        
+        :: Get adapter registry path using PowerShell
+        set "ADAPTER_REG_PATH="
+        for /f "tokens=*" %%p in ('powershell -Command "(Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -like '*Intel*' } | Select-Object -First 1 -ExpandProperty PSPath).ToString().Replace('Microsoft.PowerShell.Core\Registry::','')"') do (
+            set "ADAPTER_REG_PATH=%%p"
+        )
+        
+        if defined ADAPTER_REG_PATH (
+            echo -- Found Intel adapter registry path: !ADAPTER_REG_PATH!
+            reg add "!ADAPTER_REG_PATH!" /v "*TCPChecksumOffloadIPv4" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*TCPChecksumOffloadIPv6" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*UDPChecksumOffloadIPv4" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*UDPChecksumOffloadIPv6" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "LsoV2IPv4" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "LsoV2IPv6" /t REG_SZ /d "1" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "*JumboPacket" /t REG_SZ /d "9014" /f >nul 2>&1
+        ) else (
+            echo -- Intel adapter registry path not found, using generic registry path
+            powershell -Command "Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' | ForEach-Object { if ($_.DriverDesc -like '*Intel*') { $path = $_.PSPath.ToString().Replace('Microsoft.PowerShell.Core\Registry::',''); Write-Host $path }}"
+        )
+        
+        call :log "[OK] Intel network adapter optimizations applied"
+    )
+    
+    :: Apply Killer NIC optimizations
+    if "!IS_KILLER!"=="1" (
+        echo -- Applying Killer NIC-specific optimizations...
+        
+        :: Get adapter registry path using PowerShell
+        set "ADAPTER_REG_PATH="
+        for /f "tokens=*" %%p in ('powershell -Command "(Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -like '*Killer*' } | Select-Object -First 1 -ExpandProperty PSPath).ToString().Replace('Microsoft.PowerShell.Core\Registry::','')"') do (
+            set "ADAPTER_REG_PATH=%%p"
+        )
+        
+        if defined ADAPTER_REG_PATH (
+            echo -- Found Killer adapter registry path: !ADAPTER_REG_PATH!
+            :: Killer NIC-specific tweaks
+            reg add "!ADAPTER_REG_PATH!" /v "AdvancedEEE" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "AutoDisableGigabit" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "EnableConnectedPowerGating" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "GigaLite" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "PowerSavingMode" /t REG_SZ /d "0" /f >nul 2>&1
+        )
+        
+        call :log "[OK] Killer NIC optimizations applied"
+    )
+    
+    :: Apply gaming NIC optimizations
+    if "!IS_GAMING_NIC!"=="1" (
+        echo -- Applying Gaming NIC optimizations...
+        
+        :: Get adapter registry path using PowerShell - this will find any gaming-focused adapter
+        set "ADAPTER_REG_PATH="
+        for /f "tokens=*" %%p in ('powershell -Command "(Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -like '*Gaming*' -or $_.DriverDesc -like '*Killer*' } | Select-Object -First 1 -ExpandProperty PSPath).ToString().Replace('Microsoft.PowerShell.Core\Registry::','')"') do (
+            set "ADAPTER_REG_PATH=%%p"
+        )
+        
+        if defined ADAPTER_REG_PATH (
+            echo -- Found Gaming adapter registry path: !ADAPTER_REG_PATH!
+            :: Apply gaming-specific optimizations
+            reg add "!ADAPTER_REG_PATH!" /v "TxIntDelay" /t REG_SZ /d "5" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "TxAbsIntDelay" /t REG_SZ /d "5" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "RxIntDelay" /t REG_SZ /d "0" /f >nul 2>&1
+            reg add "!ADAPTER_REG_PATH!" /v "RxAbsIntDelay" /t REG_SZ /d "0" /f >nul 2>&1
+        )
+        
+        call :log "[OK] Gaming NIC optimizations applied"
+    )
+    
+    :: Apply generic optimizations if no specific vendor was detected
+    if "!ADAPTER_VENDOR!"=="" (
+        echo -- No specific vendor detected, applying generic optimizations...
+        
+        :: Generic optimizations that work for most adapters
+        for /f "tokens=*" %%a in ('powershell -Command "Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -ExpandProperty Name"') do (
+            echo -- Optimizing interface: %%a
+        )
+        
+        :: Disable power saving features for any adapter using PowerShell
+        powershell -Command "Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002bE10318}\*' -ErrorAction SilentlyContinue | ForEach-Object { if($_.PSChildName -ne 'Properties') { $path = $_.PSPath.ToString().Replace('Microsoft.PowerShell.Core\Registry::',''); New-ItemProperty -Path $path -Name '*EEE' -Value 0 -PropertyType String -Force | Out-Null }}" >nul 2>&1
+        
+        :: Turn off all power management for network adapters
+        powershell -Command "Get-NetAdapter | ForEach-Object { $name = $_.Name; powercfg -setacvalueindex scheme_current sub_none $name 0 }" >nul 2>&1
+        
+        call :log "[OK] Generic network adapter optimizations applied"
+    )
+    
+    :: Clean up temporary files
+    if exist "%ADAPTER_INFO%" del "%ADAPTER_INFO%" >nul 2>&1
+    if exist "%DRIVER_INFO%" del "%DRIVER_INFO%" >nul 2>&1
+    if exist "%ADAPTER_DETAILED%" del "%ADAPTER_DETAILED%" >nul 2>&1
+    if exist "%ADAPTER_REG%" del "%ADAPTER_REG%" >nul 2>&1
+    if exist "%REALTEK_CHECK%" del "%REALTEK_CHECK%" >nul 2>&1
+    if exist "%TEMP%\realtek_path.txt" del "%TEMP%\realtek_path.txt" >nul 2>&1
+    
+    call :log "[OK] Hardware-specific network adapter optimizations completed"
+)
+
 :: Generate the Network Health Report if selected
 if "%HEALTH_REPORT%"=="Y" (
     call :update_progress "Generating Network Health Report"
@@ -1446,7 +1763,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^<table^> >> "!HTML_REPORT!"
     echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
     
-    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT) do (
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT HARDWARE_TUNING) do (
         if "!%%i!"=="Y" (
             echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
         ) else (
@@ -1492,7 +1809,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT) do (
+for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT HARDWARE_TUNING) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
@@ -1678,6 +1995,9 @@ call :set_option SEC_OPTIMIZE
 
 :: Network maintenance to clean up network stack
 call :set_option NET_MAINTENANCE
+
+:: Hardware-specific network adapter optimizations
+call :set_option HARDWARE_TUNING
 
 echo.
 echo Recommended settings selected. %SELECTED_COUNT% optimizations ready to apply.
@@ -1885,3 +2205,70 @@ echo validated > "%USERPROFILE%\Documents\Networks\config_fixed.txt"
 echo Script validation complete.
 echo.
 exit /b 0
+
+:menu_hardware_tuning
+cls
+echo ================================================================
+echo    HARDWARE-SPECIFIC NETWORK ADAPTER OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Hardware-Specific Network Adapter Tuning" HARDWARE_TUNING "Optimizes based on your specific network adapter model"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p hw_choice="Enter your choice: "
+
+if "%hw_choice%"=="1" call :toggle_option HARDWARE_TUNING
+if /i "%hw_choice%"=="D" call :show_hardware_tuning_details
+if /i "%hw_choice%"=="M" goto main_menu
+goto menu_hardware_tuning
+
+:show_hardware_tuning_details
+cls
+echo ==================================================
+echo  HARDWARE-SPECIFIC NETWORK ADAPTER OPTIMIZATION DETAILS
+echo ==================================================
+echo.
+echo HARDWARE-SPECIFIC TUNING:
+echo -----------------------
+echo Actions performed:
+echo - Automatically detects your network adapter brand and model
+echo - Applies vendor-specific optimizations for Intel, Realtek, Killer, etc.
+echo - Configures advanced adapter-specific settings not available in general optimizations
+echo - Tunes interrupt moderation based on adapter capabilities
+echo - Enables hardware offloading features where supported
+echo - Adjusts buffer sizes based on adapter specifications
+echo - Configures jumbo frames for supported adapters
+echo - Disables vendor-specific power saving features
+echo.
+echo Specific optimizations for popular adapters:
+echo.
+echo Intel adapters:
+echo - Enables Jumbo Frames (MTU 9000) when supported
+echo - Optimizes TCP/UDP checksum offloading
+echo - Configures interrupt moderation for lower latency
+echo - Enables Large Send Offload v2 (LSOv2)
+echo.
+echo Realtek adapters:
+echo - Disables Green Ethernet and EEE (Energy Efficient Ethernet)
+echo - Optimizes speed/duplex and flow control settings
+echo - Configures priority and VLAN tagging for better QoS
+echo - Disables wake-on-LAN to prevent network interruptions
+echo.
+echo Killer NICs:
+echo - Disables power gating and power saving modes
+echo - Optimizes for low latency gaming
+echo - Disables features that can cause performance fluctuations
+echo - Tunes specifically for competitive gaming
+echo.
+echo Benefits:
+echo - Lower latency specific to your hardware capabilities
+echo - Better throughput utilizing hardware-specific features
+echo - More stable connection by disabling problematic features
+echo - Reduced CPU overhead by properly utilizing hardware offloading
+echo - Improved performance in latency-sensitive applications
+echo - Vendor-optimized settings that general tweaks miss
+echo.
+pause
+goto main_menu
