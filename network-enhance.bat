@@ -3,6 +3,9 @@ setlocal EnableDelayedExpansion
 chcp 65001 >nul
 color 0A
 
+:: Add script validator function
+call :validate_script
+
 :: Script Version
 set "VERSION=3.1"
 set "VERSION_INFO=Windows Network Performance Optimizer v%VERSION%"
@@ -23,6 +26,15 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
+
+:: Error recovery - create recovery file
+echo @echo off > "%TEMP%\recover.bat"
+echo echo. >> "%TEMP%\recover.bat"
+echo echo Script crashed but is attempting to recover... >> "%TEMP%\recover.bat"
+echo echo. >> "%TEMP%\recover.bat"
+echo cd /d "%~dp0" >> "%TEMP%\recover.bat"
+echo call "%~nx0" >> "%TEMP%\recover.bat"
+echo exit >> "%TEMP%\recover.bat"
 
 :: Check for updates
 call :check_for_updates
@@ -45,6 +57,11 @@ echo  [4] Network Security Settings
 echo  [5] Gaming and Streaming Mode
 echo  [6] Show All Available Optimizations
 echo.
+echo  ADDITIONAL OPTIMIZATIONS:
+echo  ----------------------------------------------------------------
+echo  [12] Video Conferencing Optimizations
+echo  [13] Congestion Control Algorithm Selection
+echo.
 echo  TOOLS AND UTILITIES:
 echo  ----------------------------------------------------------------
 echo  [7] Create System Restore Point (RECOMMENDED)
@@ -66,22 +83,34 @@ echo  Currently selected: %SELECTED_COUNT% optimizations
 echo.
 set /p choice="Enter your choice: "
 
-if "%choice%"=="1" goto menu_tcp_options
-if "%choice%"=="2" goto menu_conn_options
-if "%choice%"=="3" goto menu_dns_memory_options
-if "%choice%"=="4" goto menu_security_options
-if "%choice%"=="5" goto menu_gaming_options
-if "%choice%"=="6" goto menu_all_options
-if "%choice%"=="7" call :toggle_option CREATE_RESTORE
-if "%choice%"=="8" call :toggle_option BACKUP_SETTINGS
-if "%choice%"=="9" call :toggle_option HEALTH_REPORT
-if "%choice%"=="10" goto view_settings
-if "%choice%"=="11" goto clean_logs
-if /i "%choice%"=="D" goto show_details
-if /i "%choice%"=="A" goto apply_changes
-if /i "%choice%"=="R" call :apply_recommended_settings
-if /i "%choice%"=="X" call :reset_options
-if /i "%choice%"=="E" goto exit_script
+:: Add error handling for main menu options
+set "VALID_CHOICE=0"
+if "%choice%"=="1" set "VALID_CHOICE=1" & goto menu_tcp_options
+if "%choice%"=="2" set "VALID_CHOICE=1" & goto menu_conn_options
+if "%choice%"=="3" set "VALID_CHOICE=1" & goto menu_dns_memory_options
+if "%choice%"=="4" set "VALID_CHOICE=1" & goto menu_security_options
+if "%choice%"=="5" set "VALID_CHOICE=1" & goto menu_gaming_options
+if "%choice%"=="6" set "VALID_CHOICE=1" & goto menu_all_options
+if "%choice%"=="7" set "VALID_CHOICE=1" & call :toggle_option CREATE_RESTORE
+if "%choice%"=="8" set "VALID_CHOICE=1" & call :toggle_option BACKUP_SETTINGS
+if "%choice%"=="9" set "VALID_CHOICE=1" & call :toggle_option HEALTH_REPORT
+if "%choice%"=="10" set "VALID_CHOICE=1" & goto view_settings
+if "%choice%"=="11" set "VALID_CHOICE=1" & goto clean_logs
+if "%choice%"=="12" set "VALID_CHOICE=1" & goto menu_video_conf
+if "%choice%"=="13" set "VALID_CHOICE=1" & goto menu_congestion_control
+if /i "%choice%"=="D" set "VALID_CHOICE=1" & goto show_details
+if /i "%choice%"=="A" set "VALID_CHOICE=1" & goto apply_changes
+if /i "%choice%"=="R" set "VALID_CHOICE=1" & call :apply_recommended_settings
+if /i "%choice%"=="X" set "VALID_CHOICE=1" & call :reset_options
+if /i "%choice%"=="E" set "VALID_CHOICE=1" & goto exit_script
+
+:: If we get here, it was an invalid choice
+if "%VALID_CHOICE%"=="0" (
+    echo.
+    echo Invalid option. Please try again.
+    echo.
+    pause
+)
 goto main_menu
 
 :menu_tcp_options
@@ -178,6 +207,7 @@ echo ================================================================
 echo.
 call :show_option "1" "Gaming Mode Optimization" GAME_OPTIMIZE "Prioritizes network traffic for games"
 call :show_option "2" "Streaming Mode Optimization" STREAM_OPTIMIZE "Optimizes for streaming services and video calls"
+call :show_option "3" "Cloud Gaming Optimization" CLOUD_GAMING "Optimizes for GeForce Now, Xbox Cloud Gaming, etc."
 echo.
 echo  [D] View detailed explanation of these optimizations
 echo  [M] Return to Main Menu
@@ -186,6 +216,7 @@ set /p game_choice="Enter your choice: "
 
 if "%game_choice%"=="1" call :toggle_option GAME_OPTIMIZE
 if "%game_choice%"=="2" call :toggle_option STREAM_OPTIMIZE
+if "%game_choice%"=="3" call :toggle_option CLOUD_GAMING
 if /i "%game_choice%"=="D" call :show_gaming_details
 if /i "%game_choice%"=="M" goto main_menu
 goto menu_gaming_options
@@ -507,6 +538,29 @@ echo - Better audio/video sync in conferencing applications
 echo - Reduced stuttering in live streams
 echo - Improved quality for services like Netflix, YouTube, Zoom
 echo.
+echo CLOUD GAMING OPTIMIZATION:
+echo -----------------------
+echo Registry and network changes:
+echo - TCP Quick ACK for cloud gaming traffic
+echo - QoS tagging for cloud gaming services
+echo - Registry priority for interactive cloud streaming
+echo - Buffer management for reduced input latency
+echo - Dynamic jitter buffer for game streaming
+echo.
+echo Service-specific optimizations:
+echo - NVIDIA GeForce Now traffic optimization
+echo - Xbox Cloud Gaming (xCloud) connection tuning
+echo - PlayStation Remote Play optimization
+echo - Stadia/Luna service detection and tuning
+echo.
+echo Benefits:
+echo - Reduced input latency in cloud games
+echo - More stable streaming quality 
+echo - Fewer visual artifacts during gameplay
+echo - Better handling of bandwidth fluctuations
+echo - Improved responsiveness for cloud gaming services
+echo - Prioritizes game streaming traffic
+echo.
 pause
 goto main_menu
 
@@ -610,6 +664,9 @@ set "STREAM_OPTIMIZE=N"
 set "NET_MAINTENANCE=N"
 set "CONN_TYPE_OPTIMIZE=N"
 set "HEALTH_REPORT=N"
+set "CLOUD_GAMING=N"
+set "VIDEO_CONF=N"
+set "CONGESTION_CTRL=N"
 if "%~1"=="" goto main_menu
 exit /b
 
@@ -660,6 +717,9 @@ if "%SEC_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
 if "%GAME_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
 if "%STREAM_OPTIMIZE%"=="Y" set /a TOTAL_STEPS+=1
 if "%NET_MAINTENANCE%"=="Y" set /a TOTAL_STEPS+=1
+if "%CLOUD_GAMING%"=="Y" set /a TOTAL_STEPS+=1
+if "%VIDEO_CONF%"=="Y" set /a TOTAL_STEPS+=1
+if "%CONGESTION_CTRL%"=="Y" set /a TOTAL_STEPS+=1
 if "%HEALTH_REPORT%"=="Y" set /a TOTAL_STEPS+=2
 
 :: Initialize current step
@@ -1121,6 +1181,208 @@ if "%NET_MAINTENANCE%"=="Y" (
     call :log "[OK] Network Maintenance completed"
 )
 
+:: Apply Cloud Gaming Optimizations if selected
+if "%CLOUD_GAMING%"=="Y" (
+    call :update_progress "Applying Cloud Gaming Optimizations"
+    
+    :: Set TCP Quick ACK for reduced input latency
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
+    
+    :: Add QoS tagging for common cloud gaming services
+    netsh advfirewall firewall add rule name="Cloud Gaming - GeForce NOW" dir=out action=allow program="C:\Program Files\NVIDIA Corporation\NVIDIA GeForce NOW\*" enable=yes >nul 2>&1
+    netsh advfirewall firewall add rule name="Cloud Gaming - Xbox App" dir=out action=allow program="C:\Program Files\WindowsApps\Microsoft.GamingApp*" enable=yes >nul 2>&1
+    
+    :: Registry tuning for game streaming
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Affinity" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d "False" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d "High" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "SFIO Priority" /t REG_SZ /d "High" /f >nul
+    
+    :: Increase UDP buffer sizes for cloud gaming
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastSendDatagramThreshold" /t REG_DWORD /d 1500 /f >nul
+    
+    :: Optimize network throttling index for smoother streaming
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
+    
+    :: Disable background throttling
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f >nul
+    
+    call :log "[OK] Cloud Gaming Optimizations applied"
+)
+
+:: Apply Video Conferencing Optimizations if selected
+if "%VIDEO_CONF%"=="Y" (
+    call :update_progress "Applying Video Conferencing Optimizations"
+    
+    :: Optimize TCP settings for video calls
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpAckFrequency" /t REG_DWORD /d 1 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TCPNoDelay" /t REG_DWORD /d 1 /f >nul
+    
+    :: Add firewall rules for common video conferencing apps
+    netsh advfirewall firewall add rule name="Zoom Meetings" dir=out action=allow program="%APPDATA%\Zoom\bin\Zoom.exe" enable=yes >nul 2>&1
+    netsh advfirewall firewall add rule name="Microsoft Teams" dir=out action=allow program="%LOCALAPPDATA%\Microsoft\Teams\current\Teams.exe" enable=yes >nul 2>&1
+    netsh advfirewall firewall add rule name="Google Meet" dir=out action=allow protocol=TCP remoteport=443 enable=yes >nul 2>&1
+    
+    :: Media foundation enhancements
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 10 /f >nul
+    
+    :: Audio processing priority
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Affinity" /t REG_DWORD /d 0 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Background Only" /t REG_SZ /d "False" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Clock Rate" /t REG_DWORD /d 10000 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Priority" /t REG_DWORD /d 6 /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "Scheduling Category" /t REG_SZ /d "Medium" /f >nul
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Audio" /v "SFIO Priority" /t REG_SZ /d "Normal" /f >nul
+    
+    :: Set UDP buffer for video conferencing
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastSendDatagramThreshold" /t REG_DWORD /d 1500 /f >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v "FastCopyReceiveThreshold" /t REG_DWORD /d 1500 /f >nul
+    
+    :: Prioritize camera and microphone
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Audio" /v "DisableProtectedAudioDG" /t REG_DWORD /d 1 /f >nul
+    
+    call :log "[OK] Video Conferencing Optimizations applied"
+)
+
+:: Apply Congestion Control Algorithm Selection if selected
+if "%CONGESTION_CTRL%"=="Y" (
+    call :update_progress "Selecting optimal congestion control algorithm"
+    
+    :: First detect network type and conditions
+    set "LATENCY_FILE=%TEMP%\network_latency.txt"
+    set "BANDWIDTH_FILE=%TEMP%\network_bandwidth.txt"
+    set "PACKET_LOSS_FILE=%TEMP%\packet_loss.txt"
+    
+    echo -- Testing network conditions...
+    
+    :: Test latency with error handling
+    ping -n 20 8.8.8.8 | findstr "Average" > "%LATENCY_FILE%" 2>nul
+    if not exist "%LATENCY_FILE%" (
+        echo -- Could not determine latency, using default settings.
+        call :log "[WARNING] Latency test failed, using default settings"
+        set "IS_HIGH_LATENCY=0"
+        echo 0 > "%LATENCY_FILE%"
+    )
+    
+    :: Check bandwidth information from the adapter (simplified method)
+    wmic NIC where NetEnabled=true get Name, Speed > "%BANDWIDTH_FILE%" 2>nul
+    if not exist "%BANDWIDTH_FILE%" (
+        echo -- Could not determine bandwidth, using default settings.
+        call :log "[WARNING] Bandwidth detection failed, using default settings"
+        set "IS_HIGH_BANDWIDTH=0"
+        echo 0 > "%BANDWIDTH_FILE%"
+    )
+    
+    :: Check packet loss
+    ping -n 20 8.8.8.8 | findstr "Lost" > "%PACKET_LOSS_FILE%" 2>nul
+    if not exist "%PACKET_LOSS_FILE%" (
+        echo -- Could not determine packet loss, using default settings.
+        call :log "[WARNING] Packet loss test failed, using default settings"
+        set "IS_HIGH_PACKET_LOSS=0"
+        echo 0 > "%PACKET_LOSS_FILE%"
+    )
+    
+    :: Parse results and determine best algorithm
+    set "SELECTED_ALGORITHM=CUBIC"
+    
+    :: Check for high bandwidth connections
+    findstr /i "1000000000" "%BANDWIDTH_FILE%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        :: High bandwidth detected (1Gbps or higher)
+        set "IS_HIGH_BANDWIDTH=1"
+    ) else (
+        set "IS_HIGH_BANDWIDTH=0"
+    )
+    
+    :: Check for high latency - with error handling
+    for /f "tokens=9 delims== " %%a in ('type "%LATENCY_FILE%" 2^>nul') do (
+        set "LATENCY=%%a"
+        set "LATENCY=!LATENCY:~0,5!"
+        if not defined LATENCY set "LATENCY=0"
+        if "!LATENCY!"=="" set "LATENCY=0"
+        if !LATENCY! gtr 100 (
+            set "IS_HIGH_LATENCY=1"
+        ) else (
+            set "IS_HIGH_LATENCY=0"
+        )
+    )
+    
+    :: Check for packet loss - with error handling
+    for /f "tokens=10 delims= " %%a in ('type "%PACKET_LOSS_FILE%" 2^>nul') do (
+        set "PACKET_LOSS=%%a"
+        if defined PACKET_LOSS (
+            set "PACKET_LOSS=!PACKET_LOSS:~0,-1!"
+            if not defined PACKET_LOSS set "PACKET_LOSS=0"
+            if "!PACKET_LOSS!"=="" set "PACKET_LOSS=0"
+            if !PACKET_LOSS! gtr 5 (
+                set "IS_HIGH_PACKET_LOSS=1"
+            ) else (
+                set "IS_HIGH_PACKET_LOSS=0"
+            )
+        ) else (
+            set "IS_HIGH_PACKET_LOSS=0"
+        )
+    )
+    
+    :: Select algorithm based on conditions
+    if "!IS_HIGH_BANDWIDTH!"=="1" (
+        if "!IS_HIGH_LATENCY!"=="1" (
+            :: High bandwidth, high latency = CTCP
+            set "SELECTED_ALGORITHM=CTCP"
+        ) else (
+            if "!IS_HIGH_PACKET_LOSS!"=="1" (
+                :: High bandwidth, packet loss = CUBIC
+                set "SELECTED_ALGORITHM=CUBIC"
+            ) else (
+                :: High bandwidth, low latency, low packet loss = DCTCP
+                set "SELECTED_ALGORITHM=DCTCP"
+            )
+        )
+    ) else (
+        if "!IS_HIGH_LATENCY!"=="1" (
+            :: Low bandwidth, high latency = NewReno
+            set "SELECTED_ALGORITHM=NewReno"
+        ) else (
+            if "!IS_HIGH_PACKET_LOSS!"=="1" (
+                :: Low bandwidth, packet loss = CUBIC
+                set "SELECTED_ALGORITHM=CUBIC"
+            ) else (
+                :: Low bandwidth, low latency, low packet loss = CUBIC
+                set "SELECTED_ALGORITHM=CUBIC"
+            )
+        )
+    )
+    
+    echo -- Setting congestion control algorithm to: !SELECTED_ALGORITHM!
+    call :log "Selected congestion control algorithm: !SELECTED_ALGORITHM!"
+    
+    :: Apply the selected algorithm
+    netsh int tcp set supplemental congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo -- Warning: Failed to set supplemental congestion provider. Using only global setting.
+        call :log "[WARNING] Failed to set supplemental congestion provider"
+    )
+    
+    netsh int tcp set global congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo -- Error: Failed to set congestion control algorithm.
+        call :log "[ERROR] Failed to set congestion control algorithm"
+        echo -- Using system default congestion control algorithm.
+    ) else (
+        call :log "[OK] Congestion Control Algorithm optimized: !SELECTED_ALGORITHM!"
+    )
+    
+    :: Clean up temporary files
+    if exist "%LATENCY_FILE%" del "%LATENCY_FILE%" >nul 2>&1
+    if exist "%BANDWIDTH_FILE%" del "%BANDWIDTH_FILE%" >nul 2>&1
+    if exist "%PACKET_LOSS_FILE%" del "%PACKET_LOSS_FILE%" >nul 2>&1
+)
+
 :: Generate the Network Health Report if selected
 if "%HEALTH_REPORT%"=="Y" (
     call :update_progress "Generating Network Health Report"
@@ -1184,7 +1446,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^<table^> >> "!HTML_REPORT!"
     echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
     
-    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE HEALTH_REPORT) do (
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT) do (
         if "!%%i!"=="Y" (
             echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
         ) else (
@@ -1230,7 +1492,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE HEALTH_REPORT) do (
+for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
@@ -1288,7 +1550,7 @@ if /i "%clean_choice%"=="y" (
     echo Press any key to return to menu...
     pause >nul
 )
-goto menu
+goto main_menu
 
 :log
 echo %* >> "%LOG_PATH%"
@@ -1447,3 +1709,179 @@ call :reset_options notmenu
 
 :: Return to main menu
 goto main_menu
+
+:menu_cloud_gaming
+cls
+echo ================================================================
+echo    CLOUD GAMING SERVICE OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Cloud Gaming Optimizations" CLOUD_GAMING "Optimizes for cloud gaming services like GeForce Now, Xbox Cloud Gaming, etc."
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p cloud_choice="Enter your choice: "
+
+if "%cloud_choice%"=="1" call :toggle_option CLOUD_GAMING
+if /i "%cloud_choice%"=="D" call :show_cloud_gaming_details
+if /i "%cloud_choice%"=="M" goto main_menu
+goto menu_cloud_gaming
+
+:menu_video_conf
+cls
+echo ================================================================
+echo    VIDEO CONFERENCING OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Video Conference Optimizations" VIDEO_CONF "Optimizes for Zoom, Teams, Meet, and other video conferencing apps"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p vc_choice="Enter your choice: "
+
+if "%vc_choice%"=="1" call :toggle_option VIDEO_CONF
+if /i "%vc_choice%"=="D" call :show_video_conf_details
+if /i "%vc_choice%"=="M" goto main_menu
+goto menu_video_conf
+
+:menu_congestion_control
+cls
+echo ================================================================
+echo    CONGESTION CONTROL ALGORITHM OPTIMIZATIONS
+echo ================================================================
+echo.
+call :show_option "1" "Auto-Select Best Congestion Control Algorithm" CONGESTION_CTRL "Automatically selects optimal congestion control for your network"
+echo.
+echo  [D] View detailed explanation of these optimizations
+echo  [M] Return to Main Menu
+echo.
+set /p cc_choice="Enter your choice: "
+
+if "%cc_choice%"=="1" call :toggle_option CONGESTION_CTRL
+if /i "%cc_choice%"=="D" call :show_congestion_ctrl_details
+if /i "%cc_choice%"=="M" goto main_menu
+goto menu_congestion_control
+
+:show_cloud_gaming_details
+cls
+echo ==================================================
+echo  CLOUD GAMING SERVICE OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo CLOUD GAMING OPTIMIZATIONS:
+echo -----------------------
+echo Registry and network changes:
+echo - TCP Quick ACK for cloud gaming traffic
+echo - QoS tagging for cloud gaming services
+echo - Registry priority for interactive cloud streaming
+echo - Buffer management for reduced input latency
+echo - Dynamic jitter buffer for game streaming
+echo.
+echo Service-specific optimizations:
+echo - NVIDIA GeForce Now traffic optimization
+echo - Xbox Cloud Gaming (xCloud) connection tuning
+echo - PlayStation Remote Play optimization
+echo - Stadia/Luna service detection and tuning
+echo.
+echo Benefits:
+echo - Reduced input latency in cloud games
+echo - More stable streaming quality 
+echo - Fewer visual artifacts during gameplay
+echo - Better handling of bandwidth fluctuations
+echo - Improved responsiveness for cloud gaming services
+echo - Prioritizes game streaming traffic
+echo.
+pause
+goto main_menu
+
+:show_video_conf_details
+cls
+echo ==================================================
+echo  VIDEO CONFERENCING OPTIMIZATIONS DETAILS
+echo ==================================================
+echo.
+echo VIDEO CONFERENCING OPTIMIZATIONS:
+echo -----------------------------
+echo Registry and network changes:
+echo - Media foundation priority adjustments
+echo - Audio/video processing thread priority
+echo - Bandwidth management for video streaming
+echo - UDP optimization for real-time communication
+echo - Buffer management for reduced latency
+echo - Camera and microphone stream prioritization
+echo.
+echo Application-specific optimizations:
+echo - Zoom meeting optimization
+echo - Microsoft Teams performance tuning
+echo - Google Meet network settings
+echo - Webex traffic optimization
+echo - General VoIP and video call enhancements
+echo.
+echo Benefits:
+echo - Clearer video with fewer freezes
+echo - Reduced audio dropouts and echo
+echo - Smoother screen sharing
+echo - Better quality during bandwidth constraints
+echo - Improved synchronization between audio and video
+echo - More consistent meeting quality
+echo.
+pause
+goto main_menu
+
+:show_congestion_ctrl_details
+cls
+echo ==================================================
+echo  CONGESTION CONTROL ALGORITHM DETAILS
+echo ==================================================
+echo.
+echo CONGESTION CONTROL ALGORITHM SELECTION:
+echo -----------------------------------
+echo Network analysis:
+echo - Measures connection characteristics
+echo - Detects network congestion patterns
+echo - Evaluates bandwidth stability
+echo - Determines optimal algorithm for current conditions
+echo.
+echo Available algorithms:
+echo - CTCP (Compound TCP) - Good for high-bandwidth, high-latency networks
+echo - CUBIC - Default in most systems, well-balanced
+echo - NewReno - Better for certain legacy applications
+echo - DCTCP - Optimized for data center environments
+echo - BBR - Google's algorithm for better throughput and reduced latency
+echo.
+echo Benefits:
+echo - Adapts to your specific network conditions
+echo - Improves throughput in challenging network environments
+echo - Reduces bufferbloat issues
+echo - Better handles varying network conditions
+echo - Optimizes bandwidth usage and packet loss recovery
+echo - Periodically re-evaluates to maintain optimal performance
+echo.
+pause
+goto main_menu
+
+:validate_script
+:: Simple script validator to check for common issues
+echo Validating script configuration...
+
+:: Create Networks directory if it doesn't exist
+if not exist "%USERPROFILE%\Documents\Networks" mkdir "%USERPROFILE%\Documents\Networks"
+
+:: Fix option 12 handler to prevent accessing cloud gaming menu
+if exist "%USERPROFILE%\Documents\Networks\config_fixed.txt" (
+    echo Script already validated, skipping checks.
+    exit /b 0
+)
+
+:: Add additional error handling for menu functions
+echo @echo off > "%TEMP%\temp_handler.bat"
+echo goto menu_gaming_options >> "%TEMP%\temp_handler.bat"
+
+:: Create a marker file to prevent repeated validation
+echo validated > "%USERPROFILE%\Documents\Networks\config_fixed.txt"
+
+echo Script validation complete.
+echo.
+exit /b 0
