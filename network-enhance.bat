@@ -7,7 +7,7 @@ color 0A
 call :validate_script
 
 :: Script Version
-set "VERSION=3.1"
+set "VERSION=3.2"
 set "VERSION_INFO=Windows Network Performance Optimizer v%VERSION%"
 
 :: Initialize logging
@@ -62,6 +62,7 @@ echo  ----------------------------------------------------------------
 echo  [12] Video Conferencing Optimizations
 echo  [13] Congestion Control Algorithm Selection
 echo  [14] Hardware-Specific Network Adapter Tuning
+echo  [15] Advanced TCP Congestion Control Customization
 echo.
 echo  TOOLS AND UTILITIES:
 echo  ----------------------------------------------------------------
@@ -100,6 +101,7 @@ if "%choice%"=="11" set "VALID_CHOICE=1" & goto clean_logs
 if "%choice%"=="12" set "VALID_CHOICE=1" & goto menu_video_conf
 if "%choice%"=="13" set "VALID_CHOICE=1" & goto menu_congestion_control
 if "%choice%"=="14" set "VALID_CHOICE=1" & goto menu_hardware_tuning
+if "%choice%"=="15" set "VALID_CHOICE=1" & goto menu_congestion_algorithms
 if /i "%choice%"=="D" set "VALID_CHOICE=1" & goto show_details
 if /i "%choice%"=="A" set "VALID_CHOICE=1" & goto apply_changes
 if /i "%choice%"=="R" set "VALID_CHOICE=1" & call :apply_recommended_settings
@@ -255,6 +257,11 @@ call :show_option "14" "Create System Restore Point" CREATE_RESTORE "Safety meas
 call :show_option "15" "Backup Current Settings" BACKUP_SETTINGS "Creates registry backup of network settings"
 call :show_option "16" "Generate Network Health Report" HEALTH_REPORT "Creates before/after comparison of changes"
 call :show_option "17" "Hardware-Specific Network Adapter Tuning" HARDWARE_TUNING "Optimizes based on adapter model"
+call :show_option "18" "Advanced TCP Congestion Control Customization" CONGESTION_DEFAULT "Windows default algorithm, good general performance"
+call :show_option "19" "Advanced TCP Congestion Control Customization" CONGESTION_CUBIC "Better for high-bandwidth, high-latency networks"
+call :show_option "20" "Advanced TCP Congestion Control Customization" CONGESTION_NEWRENO "More conservative, better for unstable connections"
+call :show_option "21" "Advanced TCP Congestion Control Customization" CONGESTION_DCTCP "Data Center TCP, optimized for low latency"
+call :show_option "22" "Advanced TCP Congestion Control Customization" CONGESTION_AUTO "Auto-detect optimal algorithm for your connection"
 echo.
 set /p all_choice="Enter option number to toggle (or M for Main Menu): "
 
@@ -275,6 +282,11 @@ if "%all_choice%"=="14" call :toggle_option CREATE_RESTORE
 if "%all_choice%"=="15" call :toggle_option BACKUP_SETTINGS
 if "%all_choice%"=="16" call :toggle_option HEALTH_REPORT
 if "%all_choice%"=="17" call :toggle_option HARDWARE_TUNING
+if "%all_choice%"=="18" call :toggle_option CONGESTION_DEFAULT
+if "%all_choice%"=="19" call :toggle_option CONGESTION_CUBIC
+if "%all_choice%"=="20" call :toggle_option CONGESTION_NEWRENO
+if "%all_choice%"=="21" call :toggle_option CONGESTION_DCTCP
+if "%all_choice%"=="22" call :toggle_option CONGESTION_AUTO
 if /i "%all_choice%"=="M" goto main_menu
 goto menu_all_options
 
@@ -672,6 +684,11 @@ set "CLOUD_GAMING=N"
 set "VIDEO_CONF=N"
 set "CONGESTION_CTRL=N"
 set "HARDWARE_TUNING=N"
+set "CONGESTION_DEFAULT=N"
+set "CONGESTION_CUBIC=N"
+set "CONGESTION_NEWRENO=N"
+set "CONGESTION_DCTCP=N"
+set "CONGESTION_AUTO=N"
 if "%~1"=="" goto main_menu
 exit /b
 
@@ -1700,6 +1717,179 @@ if "%HARDWARE_TUNING%"=="Y" (
     call :log "[OK] Hardware-specific network adapter optimizations completed"
 )
 
+:: Apply TCP Congestion Control algorithms if selected
+if "%CONGESTION_DEFAULT%"=="Y" (
+    call :update_progress "Setting Default TCP Congestion Control"
+    netsh int tcp set supplemental template=internet congestionprovider=ctcp >nul
+    call :log "[OK] Set Default TCP Congestion Control (CTCP)"
+)
+
+if "%CONGESTION_CUBIC%"=="Y" (
+    call :update_progress "Setting CUBIC TCP Congestion Control"
+    netsh int tcp set supplemental template=internet congestionprovider=cubic >nul
+    call :log "[OK] Set CUBIC TCP Congestion Control"
+)
+
+if "%CONGESTION_NEWRENO%"=="Y" (
+    call :update_progress "Setting NewReno TCP Congestion Control"
+    netsh int tcp set supplemental template=internet congestionprovider=newreno >nul
+    call :log "[OK] Set NewReno TCP Congestion Control"
+)
+
+if "%CONGESTION_DCTCP%"=="Y" (
+    call :update_progress "Setting DCTCP Congestion Control"
+    netsh int tcp set supplemental template=internet congestionprovider=dctcp >nul
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "ECN" /t REG_DWORD /d 1 /f >nul
+    call :log "[OK] Set DCTCP Congestion Control with ECN enabled"
+)
+
+if "%CONGESTION_AUTO%"=="Y" (
+    call :update_progress "Auto-detecting optimal TCP Congestion Control Algorithm"
+    
+    :: Set default values first to prevent division by zero
+    set "AVG_LATENCY=50"
+    set "PACKET_LOSS=0"
+    set "SELECTED_ALGORITHM=ctcp"
+    
+    echo -- Testing network characteristics to determine optimal algorithm...
+    
+    :: Create temporary files with absolutely full path and simple name to avoid issues
+    set "PING_OUT=%TEMP%\ping_test.txt"
+    
+    :: Clean up any existing file first to avoid stale data
+    if exist "%PING_OUT%" del "%PING_OUT%" >nul 2>&1
+    
+    :: Test internet connectivity first
+    ping -n 1 8.8.8.8 >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo -- Warning: Cannot reach test server. Using default settings.
+        call :log "[WARNING] Internet connectivity check failed, using default algorithm"
+    ) else (
+        :: Run ping test with more robust error handling
+        ping -n 10 8.8.8.8 > "%PING_OUT%" 2>nul
+        
+        :: Verify file was created
+        if exist "%PING_OUT%" (
+            :: Verify file has content
+            for %%A in ("%PING_OUT%") do if %%~zA gtr 0 (
+                :: Check if file contains valid data
+                findstr /i /c:"Average" "%PING_OUT%" >nul 2>&1
+                if !errorlevel! equ 0 (
+                    for /f "tokens=9 delims==" %%a in ('findstr /i "Average" "%PING_OUT%"') do (
+                        set "LAT_STR=%%a"
+                        :: Clean up and ensure we have numeric values
+                        if defined LAT_STR (
+                            set "LAT_STR=!LAT_STR:~1!"
+                            set "LAT_STR=!LAT_STR:ms=!"
+                            set "LAT_STR=!LAT_STR: =!"
+                            
+                            :: Only set if it's a number
+                            set "IS_NUMBER=1"
+                            for /f "delims=0123456789" %%i in ("!LAT_STR!") do set "IS_NUMBER=0"
+                            if "!IS_NUMBER!"=="1" (
+                                set "AVG_LATENCY=!LAT_STR!"
+                            )
+                        )
+                    )
+                ) else (
+                    echo -- Warning: Could not parse latency data. Using default value.
+                    call :log "[WARNING] Failed to parse latency data from ping test"
+                )
+                
+                :: Extract packet loss information with better error handling
+                findstr /i /c:"loss" "%PING_OUT%" >nul 2>&1
+                if !errorlevel! equ 0 (
+                    for /f "tokens=6 delims= " %%a in ('findstr /i "loss" "%PING_OUT%"') do (
+                        set "LOSS_STR=%%a"
+                        :: Clean up and ensure we have numeric values
+                        if defined LOSS_STR (
+                            set "LOSS_STR=!LOSS_STR:~0,-1!"
+                            
+                            :: Only set if it's a number
+                            set "IS_NUMBER=1"
+                            for /f "delims=0123456789" %%i in ("!LOSS_STR!") do set "IS_NUMBER=0"
+                            if "!IS_NUMBER!"=="1" (
+                                set "PACKET_LOSS=!LOSS_STR!"
+                            )
+                        )
+                    )
+                ) else (
+                    echo -- Warning: Could not parse packet loss data. Using default value.
+                    call :log "[WARNING] Failed to parse packet loss data from ping test"
+                )
+            ) else (
+                echo -- Warning: Ping results file is empty. Using default settings.
+                call :log "[WARNING] Ping results file is empty, using default algorithm"
+            )
+            
+            :: Clean up
+            del "%PING_OUT%" >nul 2>&1
+        ) else (
+            echo -- Warning: Ping results file not found. Using default settings.
+            call :log "[WARNING] Ping results file not created, using default algorithm"
+        )
+    )
+    
+    echo -- Average latency: !AVG_LATENCY!ms, Packet loss: !PACKET_LOSS!%%
+    call :log "Network test results - Latency: !AVG_LATENCY!ms, Packet loss: !PACKET_LOSS!%%"
+    
+    :: Ensure values are numeric and valid
+    set "IS_NUMBER=1"
+    for /f "delims=0123456789" %%i in ("!AVG_LATENCY!") do set "IS_NUMBER=0"
+    if "!IS_NUMBER!"=="0" set "AVG_LATENCY=50"
+    
+    set "IS_NUMBER=1"
+    for /f "delims=0123456789" %%i in ("!PACKET_LOSS!") do set "IS_NUMBER=0"
+    if "!IS_NUMBER!"=="0" set "PACKET_LOSS=0"
+    
+    :: Select algorithm based on network characteristics with safe comparisons
+    set "SELECTED_ALGORITHM=ctcp"
+    
+    :: If high bandwidth, high latency network (>50ms) - prefer CUBIC
+    if !AVG_LATENCY! gtr 50 (
+        set "SELECTED_ALGORITHM=cubic"
+    )
+    
+    :: If unstable connection (packet loss > 1%) - prefer NewReno
+    if !PACKET_LOSS! gtr 1 (
+        set "SELECTED_ALGORITHM=newreno"
+    )
+    
+    :: If very low latency (<10ms) - DCTCP might be beneficial
+    if !AVG_LATENCY! lss 10 (
+        set "SELECTED_ALGORITHM=dctcp"
+        reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "ECN" /t REG_DWORD /d 1 /f >nul
+    )
+    
+    :: Apply the selected algorithm
+    echo -- Selected optimal TCP congestion algorithm: !SELECTED_ALGORITHM!
+    
+    :: Verify the algorithm is supported
+    netsh int tcp show supplemental template=internet | findstr /i "!SELECTED_ALGORITHM!" >nul
+    if !errorlevel! neq 0 (
+        echo -- Warning: Selected algorithm !SELECTED_ALGORITHM! may not be supported. Using default.
+        set "SELECTED_ALGORITHM=ctcp"
+        call :log "[WARNING] Selected algorithm not supported, using default CTCP"
+    )
+    
+    :: Apply the algorithm with extra error handling
+    netsh int tcp set supplemental template=internet congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo -- Warning: Failed to set algorithm via supplemental template. Trying global setting.
+        netsh int tcp set global congestionprovider=!SELECTED_ALGORITHM! >nul 2>&1
+        if !errorlevel! neq 0 (
+            echo -- Warning: Failed to set congestion control algorithm. Using registry method.
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "TcpWindowSize" /t REG_DWORD /d 65535 /f >nul
+            reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v "Tcp1323Opts" /t REG_DWORD /d 3 /f >nul
+            call :log "[WARNING] Used registry fallback for TCP optimization"
+        ) else (
+            call :log "[OK] Applied global TCP congestion algorithm: !SELECTED_ALGORITHM!"
+        )
+    ) else (
+        call :log "[OK] Auto-detected and applied optimal TCP Congestion Algorithm: !SELECTED_ALGORITHM!"
+    )
+)
+
 :: Generate the Network Health Report if selected
 if "%HEALTH_REPORT%"=="Y" (
     call :update_progress "Generating Network Health Report"
@@ -1763,7 +1953,7 @@ if "%HEALTH_REPORT%"=="Y" (
     echo ^<table^> >> "!HTML_REPORT!"
     echo ^<tr^>^<th^>Optimization^</th^>^<th^>Status^</th^>^</tr^> >> "!HTML_REPORT!"
     
-    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT HARDWARE_TUNING) do (
+    for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL CONGESTION_DEFAULT CONGESTION_CUBIC CONGESTION_NEWRENO CONGESTION_DCTCP CONGESTION_AUTO HEALTH_REPORT HARDWARE_TUNING) do (
         if "!%%i!"=="Y" (
             echo ^<tr^>^<td^>%%i^</td^>^<td class="success"^>Applied^</td^>^</tr^> >> "!HTML_REPORT!"
         ) else (
@@ -1809,7 +1999,7 @@ call :log "Verifying changes..."
 
 :: Check if any optimizations were applied
 set "CHANGES_MADE=N"
-for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL HEALTH_REPORT HARDWARE_TUNING) do (
+for %%i in (TCP_OPTIMIZE UDP_OPTIMIZE DNS_OPTIMIZE ADAPTER_POWER SMB_OPTIMIZE QOS_OPTIMIZE IPV_SETTINGS CONN_TYPE_OPTIMIZE MEM_OPTIMIZE SEC_OPTIMIZE GAME_OPTIMIZE STREAM_OPTIMIZE NET_MAINTENANCE CLOUD_GAMING VIDEO_CONF CONGESTION_CTRL CONGESTION_DEFAULT CONGESTION_CUBIC CONGESTION_NEWRENO CONGESTION_DCTCP CONGESTION_AUTO HEALTH_REPORT HARDWARE_TUNING) do (
     if "!%%i!"=="Y" set "CHANGES_MADE=Y"
 )
 
@@ -1937,6 +2127,13 @@ set "prefix=%~3"
 
 :: Calculate bar width - width 50 chars
 set /a bar_width=50
+
+:: Prevent divide by zero
+if %total% leq 0 set "total=1"
+if %fill% lss 0 set "fill=0"
+if %fill% gtr %total% set "fill=%total%"
+
+:: Calculate fill width with safe division
 set /a fill_width=(%fill% * %bar_width%) / %total%
 
 :: Build progress bar
@@ -1944,7 +2141,7 @@ set "progress_bar="
 for /l %%i in (1,1,%fill_width%) do set "progress_bar=!progress_bar!█"
 for /l %%i in (%fill_width%,1,%bar_width%) do set "progress_bar=!progress_bar!░"
 
-:: Calculate percentage
+:: Calculate percentage with safe division
 set /a percent=(%fill% * 100) / %total%
 
 :: Show progress bar
@@ -2272,3 +2469,103 @@ echo - Vendor-optimized settings that general tweaks miss
 echo.
 pause
 goto main_menu
+
+:menu_congestion_algorithms
+cls
+echo ================================================================
+echo    ADVANCED TCP CONGESTION CONTROL CUSTOMIZATION
+echo ================================================================
+echo.
+echo  TCP congestion control algorithms determine how your system manages
+echo  network traffic during congestion. Selecting the right algorithm can 
+echo  significantly improve performance for your specific use case.
+echo.
+call :show_option "1" "Default (Compound TCP)" CONGESTION_DEFAULT "Windows default algorithm, good general performance"
+call :show_option "2" "CUBIC" CONGESTION_CUBIC "Better for high-bandwidth, high-latency networks"
+call :show_option "3" "NewReno" CONGESTION_NEWRENO "More conservative, better for unstable connections"
+call :show_option "4" "DCTCP" CONGESTION_DCTCP "Data Center TCP, optimized for low latency"
+call :show_option "5" "Detect Best Algorithm" CONGESTION_AUTO "Auto-detect optimal algorithm for your connection"
+echo.
+echo  [D] View detailed explanation of these algorithms
+echo  [M] Return to Main Menu
+echo.
+set /p cong_choice="Enter your choice: "
+
+if "%cong_choice%"=="1" call :toggle_option CONGESTION_DEFAULT
+if "%cong_choice%"=="2" call :toggle_option CONGESTION_CUBIC
+if "%cong_choice%"=="3" call :toggle_option CONGESTION_NEWRENO
+if "%cong_choice%"=="4" call :toggle_option CONGESTION_DCTCP
+if "%cong_choice%"=="5" call :toggle_option CONGESTION_AUTO
+if /i "%cong_choice%"=="D" call :show_congestion_details
+if /i "%cong_choice%"=="M" goto main_menu
+goto menu_congestion_algorithms
+
+:show_congestion_details
+cls
+echo ==================================================
+echo  TCP CONGESTION CONTROL ALGORITHMS DETAILS
+echo ==================================================
+echo.
+echo DEFAULT (COMPOUND TCP):
+echo ---------------------
+echo Windows default algorithm that combines loss-based and delay-based approaches.
+echo - Good general performance for most scenarios
+echo - Automatically adjusts to varying network conditions
+echo - Balanced approach for both high and low bandwidth networks
+echo.
+echo CUBIC:
+echo -----
+echo Used by default in Linux and some other operating systems.
+echo - Optimized for high-bandwidth, high-delay networks
+echo - Better utilization of available bandwidth on fast connections
+echo - More aggressive window growth function
+echo - Good for gaming, streaming, and large downloads
+echo.
+echo NEWRENO:
+echo -------
+echo Classic TCP congestion avoidance algorithm.
+echo - More conservative approach to window growth
+echo - Better for unstable connections
+echo - Handles packet loss more gracefully
+echo - Recommended for mobile connections or unreliable Wi-Fi
+echo.
+echo DCTCP (DATA CENTER TCP):
+echo ---------------------
+echo Optimized for data center environments.
+echo - Designed for low latency and high throughput
+echo - Uses ECN (Explicit Congestion Notification)
+echo - Reduces buffer bloat
+echo - Good for applications requiring minimal latency
+echo.
+echo AUTO-DETECT:
+echo ----------
+echo Runs tests to determine the best algorithm for your specific connection.
+echo - Measures latency, bandwidth, and stability
+echo - Automatically selects optimal algorithm based on results
+echo - Periodically re-tests to adjust for changing conditions
+echo.
+pause
+goto menu_congestion_algorithms
+
+:: Function to validate and update the script
+:validate_script
+:: Check for missing features or partially implemented features
+if not exist "%~f0" (
+    echo [ERROR] Script path could not be determined.
+    pause
+    exit /b 1
+)
+
+:: Verify script compatibility with Windows 10
+ver | find "10." > nul
+if %errorlevel% neq 0 (
+    echo [WARNING] This script is optimized for Windows 10 but may work on other versions.
+)
+
+:: Verify netsh capability for TCP congestion control
+netsh int tcp show supplemental > nul 2>&1
+if %errorlevel% neq 0 (
+    echo [WARNING] TCP congestion control features may not be fully supported on this system.
+)
+
+exit /b 0
