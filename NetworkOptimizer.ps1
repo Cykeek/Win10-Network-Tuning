@@ -1169,8 +1169,10 @@ function Test-NetworkAdapters {
             $netAdapters = Get-NetAdapter -ErrorAction Stop | Where-Object { 
                 $_.Status -eq 'Up' -and $_.Virtual -eq $false -and $_.Hidden -eq $false 
             }
+            Write-OptimizationLog "Get-NetAdapter returned $($netAdapters.Count) filtered adapters" -Level "Debug"
             if ($netAdapters -and $netAdapters.Count -gt 0) {
                 $detectedAdapters += $netAdapters | ForEach-Object {
+                    Write-OptimizationLog "Found adapter via Get-NetAdapter: $($_.Name) - $($_.InterfaceDescription)" -Level "Debug"
                     [PSCustomObject]@{
                         Name = $_.Name
                         InterfaceDescription = $_.InterfaceDescription
@@ -1185,12 +1187,41 @@ function Test-NetworkAdapters {
                 Write-OptimizationLog "Get-NetAdapter found $($netAdapters.Count) active adapter(s)" -Level "Debug"
             } else {
                 $detectionMethods += "Get-NetAdapter: No active adapters found"
-                Write-OptimizationLog "Get-NetAdapter: No active adapters detected" -Level "Debug"
+                Write-OptimizationLog "Get-NetAdapter: No active adapters detected after filtering" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += "Get-NetAdapter: Failed - $($_.Exception.Message)"
             Write-OptimizationLog "Get-NetAdapter failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # If no adapters found with strict filtering, try relaxed filtering
+        if ($detectedAdapters.Count -eq 0) {
+            Write-OptimizationLog "No adapters found with strict filtering, trying relaxed filtering" -Level "Debug"
+            
+            # Method 1b: Get-NetAdapter with relaxed filtering (allow virtual/hidden if they're the only ones)
+            try {
+                $relaxedAdapters = Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' }
+                if ($relaxedAdapters -and $relaxedAdapters.Count -gt 0) {
+                    $detectedAdapters += $relaxedAdapters | ForEach-Object {
+                        Write-OptimizationLog "Found adapter via relaxed filtering: $($_.Name) - $($_.InterfaceDescription) (Virtual:$($_.Virtual) Hidden:$($_.Hidden))" -Level "Debug"
+                        [PSCustomObject]@{
+                            Name = $_.Name
+                            InterfaceDescription = $_.InterfaceDescription
+                            LinkSpeed = $_.LinkSpeed
+                            MediaType = $_.MediaType
+                            Status = $_.Status
+                            Method = 'Get-NetAdapter-Relaxed'
+                            InterfaceIndex = $_.InterfaceIndex
+                        }
+                    }
+                    $detectionMethods += "Get-NetAdapter-Relaxed: Found $($relaxedAdapters.Count) adapter(s)"
+                    Write-OptimizationLog "Relaxed filtering found $($relaxedAdapters.Count) active adapter(s)" -Level "Debug"
+                }
+            }
+            catch {
+                Write-OptimizationLog "Relaxed Get-NetAdapter also failed: $($_.Exception.Message)" -Level "Debug"
+            }
         }
         
         # Method 2: WMI Win32_NetworkAdapter (Fallback)
