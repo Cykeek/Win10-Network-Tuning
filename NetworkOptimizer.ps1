@@ -3648,18 +3648,37 @@ function Test-TCPIPOptimizationRequirements {
             # Use the robust adapter detection function
             $adapterResult = Test-NetworkAdapters
             
-            if ($adapterResult.Success -and $adapterResult.Adapters.Count -gt 0) {
-                $adapterTest.Details += "[OK] Found $($adapterResult.Adapters.Count) active network adapter(s) using comprehensive detection"
+            Write-OptimizationLog "TCP/IP validation - adapter result Success: $($adapterResult.Success)" -Level "Debug"
+            Write-OptimizationLog "TCP/IP validation - adapter count: $($adapterResult.Adapters.Count)" -Level "Debug"
+            Write-OptimizationLog "TCP/IP validation - adapters type: $($adapterResult.Adapters.GetType().Name)" -Level "Debug"
+            Write-OptimizationLog "TCP/IP validation - adapters is null: $($null -eq $adapterResult.Adapters)" -Level "Debug"
+            Write-OptimizationLog "TCP/IP validation - full condition: Success=$($adapterResult.Success), HasAdapters=$($null -ne $adapterResult.Adapters), Count=$($adapterResult.Adapters.Count)" -Level "Debug"
+            
+            # Force array conversion and explicit boolean comparison
+            $hasAdapters = $false
+            if ($adapterResult.Success -eq $true) {
+                $adapterArray = @($adapterResult.Adapters)
+                if ($adapterArray.Count -gt 0) {
+                    $hasAdapters = $true
+                }
+            }
+            
+            Write-OptimizationLog "TCP/IP validation - hasAdapters final result: $hasAdapters" -Level "Debug"
+            
+            if ($hasAdapters) {
+                $adapterTest.Details += "[OK] Found $(@($adapterResult.Adapters).Count) active network adapter(s) using comprehensive detection"
                 foreach ($adapter in $adapterResult.Adapters) {
                     $adapterTest.Details += "  - $($adapter.Name) ($($adapter.InterfaceDescription)) [Method: $($adapter.Method)]"
                 }
                 $adapterTest.Details += "Detection methods used: $($adapterResult.DetectionMethods -join '; ')"
+                Write-OptimizationLog "TCP/IP validation - adapters found successfully" -Level "Debug"
             } else {
                 # Still don't fail completely - optimizations can be applied for future use
                 $adapterTest.Success = $true
                 $adapterTest.Details += "[WARN] No active network adapters detected despite comprehensive detection"
                 $adapterTest.Details += "Detection methods attempted: $($adapterResult.DetectionMethods -join '; ')"
                 $results.Warnings += "No active network adapters detected using multiple detection methods - optimizations will apply to future connections"
+                Write-OptimizationLog "TCP/IP validation - no adapters detected. Success: $($adapterResult.Success), Count: $(@($adapterResult.Adapters).Count)" -Level "Debug"
             }
         }
         catch {
