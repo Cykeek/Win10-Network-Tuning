@@ -83,7 +83,8 @@ param(
 )
 
 #Requires -Version 5.1
-# Note: Administrator requirement checked dynamically for better remote execution support
+# Administrator requirement: Checked dynamically to support AutoPreview and remote execution
+# For full functionality, run as Administrator
 
 # Script metadata
 $Script:Version = "1.0.0"
