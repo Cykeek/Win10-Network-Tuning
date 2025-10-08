@@ -250,6 +250,9 @@ function Initialize-NetworkOptimizer {
             $WhatIfPreference = $true
             $PSBoundParameters['WhatIf'] = $true
             $Script:AutoPreviewEnabled = $true
+        } elseif ($AutoPreview -and (Test-AdministratorPrivileges)) {
+            Write-Host "Running as administrator - AutoPreview disabled, proceeding with full execution mode" -ForegroundColor Green
+            $Script:AutoPreviewEnabled = $false
         }
         
         # Set up logging first
@@ -1106,13 +1109,19 @@ function Test-RegistryAccess {
         )
         
         foreach ($path in $testPaths) {
-            # Test read access
+            # Test if path exists, if not, check if we can create it
             if (-not (Test-Path $path)) {
-                Write-OptimizationLog "Registry path not accessible: $path" -Level "Warning"
-                return $false
+                # Some paths like Psched policy path may not exist and that's okay
+                if ($path -like "*Policies*") {
+                    Write-OptimizationLog "Registry policy path doesn't exist (will be created if needed): $path" -Level "Debug"
+                    continue
+                } else {
+                    Write-OptimizationLog "Critical registry path not accessible: $path" -Level "Warning"
+                    return $false
+                }
             }
             
-            # Test read access first - this is sufficient for most operations
+            # Test read access for existing paths
             try {
                 Get-ItemProperty -Path $path -ErrorAction Stop | Out-Null
                 Write-OptimizationLog "Registry access confirmed for: $path" -Level "Debug"
