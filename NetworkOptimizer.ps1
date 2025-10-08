@@ -1144,54 +1144,233 @@ function Test-RegistryAccess {
 function Test-NetworkAdapters {
     <#
     .SYNOPSIS
-        Validate presence and status of network adapters
+        Validate presence and status of network adapters with comprehensive detection
     
     .DESCRIPTION
-        Checks for active network adapters and their operational status
-        to ensure network optimizations can be applied effectively.
+        Uses multiple methods to detect active network adapters including PowerShell cmdlets,
+        WMI, CIM, and registry methods to ensure robust detection across different systems.
     
     .OUTPUTS
-        [hashtable] Network adapter validation results
+        [hashtable] Network adapter validation results with detailed information
     #>
     [CmdletBinding()]
     [OutputType([hashtable])]
     param()
     
     try {
-        $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
+        $detectedAdapters = @()
+        $detectionMethods = @()
         
-        # Fallback to WMI if Get-NetAdapter fails
-        if ($null -eq $adapters -or $adapters.Count -eq 0) {
-            $wmiAdapters = Get-WmiObject -Class Win32_NetworkAdapter -ErrorAction SilentlyContinue | 
-                         Where-Object { $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true }
-            
-            if ($wmiAdapters -and $wmiAdapters.Count -gt 0) {
-                $adapters = $wmiAdapters | Select-Object @{Name='Name';Expression={$_.NetConnectionID}}, 
-                                                       @{Name='InterfaceDescription';Expression={$_.Description}}, 
-                                                       @{Name='LinkSpeed';Expression={$_.Speed}}, 
-                                                       @{Name='MediaType';Expression={'Ethernet'}}
+        Write-OptimizationLog "Starting comprehensive network adapter detection" -Level "Debug"
+        
+        # Method 1: Get-NetAdapter (Modern PowerShell)
+        Write-OptimizationLog "Method 1: Attempting Get-NetAdapter detection" -Level "Debug"
+        try {
+            $netAdapters = Get-NetAdapter -ErrorAction Stop | Where-Object { 
+                $_.Status -eq 'Up' -and $_.Virtual -eq $false -and $_.Hidden -eq $false 
+            }
+            if ($netAdapters -and $netAdapters.Count -gt 0) {
+                $detectedAdapters += $netAdapters | ForEach-Object {
+                    [PSCustomObject]@{
+                        Name = $_.Name
+                        InterfaceDescription = $_.InterfaceDescription
+                        LinkSpeed = $_.LinkSpeed
+                        MediaType = $_.MediaType
+                        Status = $_.Status
+                        Method = 'Get-NetAdapter'
+                        InterfaceIndex = $_.InterfaceIndex
+                    }
+                }
+                $detectionMethods += "Get-NetAdapter: Found $($netAdapters.Count) adapter(s)"
+                Write-OptimizationLog "Get-NetAdapter found $($netAdapters.Count) active adapter(s)" -Level "Debug"
+            } else {
+                $detectionMethods += "Get-NetAdapter: No active adapters found"
+                Write-OptimizationLog "Get-NetAdapter: No active adapters detected" -Level "Debug"
             }
         }
+        catch {
+            $detectionMethods += "Get-NetAdapter: Failed - $($_.Exception.Message)"
+            Write-OptimizationLog "Get-NetAdapter failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # Method 2: WMI Win32_NetworkAdapter (Fallback)
+        Write-OptimizationLog "Method 2: Attempting WMI Win32_NetworkAdapter detection" -Level "Debug"
+        try {
+            $wmiAdapters = Get-WmiObject -Class Win32_NetworkAdapter -ErrorAction Stop | Where-Object { 
+                $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true -and $_.PhysicalAdapter -eq $true
+            }
+            if ($wmiAdapters -and $wmiAdapters.Count -gt 0) {
+                $wmiResults = $wmiAdapters | ForEach-Object {
+                    [PSCustomObject]@{
+                        Name = if ($_.NetConnectionID) { $_.NetConnectionID } else { $_.Name }
+                        InterfaceDescription = $_.Description
+                        LinkSpeed = $_.Speed
+                        MediaType = if ($_.AdapterTypeId -eq 0) { 'Ethernet' } elseif ($_.AdapterTypeId -eq 71) { 'WiFi' } else { 'Unknown' }
+                        Status = 'Up'
+                        Method = 'WMI'
+                        InterfaceIndex = $_.InterfaceIndex
+                    }
+                }
+                # Only add if we don't already have adapters from Get-NetAdapter
+                if ($detectedAdapters.Count -eq 0) {
+                    $detectedAdapters += $wmiResults
+                }
+                $detectionMethods += "WMI Win32_NetworkAdapter: Found $($wmiAdapters.Count) adapter(s)"
+                Write-OptimizationLog "WMI found $($wmiAdapters.Count) active adapter(s)" -Level "Debug"
+            } else {
+                $detectionMethods += "WMI Win32_NetworkAdapter: No active adapters found"
+                Write-OptimizationLog "WMI: No active adapters detected" -Level "Debug"
+            }
+        }
+        catch {
+            $detectionMethods += "WMI Win32_NetworkAdapter: Failed - $($_.Exception.Message)"
+            Write-OptimizationLog "WMI Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # Method 3: CIM Instance (Alternative)
+        Write-OptimizationLog "Method 3: Attempting CIM Win32_NetworkAdapter detection" -Level "Debug"
+        try {
+            $cimAdapters = Get-CimInstance -ClassName Win32_NetworkAdapter -ErrorAction Stop | Where-Object { 
+                $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true
+            }
+            if ($cimAdapters -and $cimAdapters.Count -gt 0) {
+                $cimResults = $cimAdapters | ForEach-Object {
+                    [PSCustomObject]@{
+                        Name = if ($_.NetConnectionID) { $_.NetConnectionID } else { $_.Name }
+                        InterfaceDescription = $_.Description
+                        LinkSpeed = $_.Speed
+                        MediaType = 'Network'
+                        Status = 'Up'
+                        Method = 'CIM'
+                        InterfaceIndex = $_.InterfaceIndex
+                    }
+                }
+                # Only add if we don't already have adapters
+                if ($detectedAdapters.Count -eq 0) {
+                    $detectedAdapters += $cimResults
+                }
+                $detectionMethods += "CIM Win32_NetworkAdapter: Found $($cimAdapters.Count) adapter(s)"
+                Write-OptimizationLog "CIM found $($cimAdapters.Count) active adapter(s)" -Level "Debug"
+            } else {
+                $detectionMethods += "CIM Win32_NetworkAdapter: No active adapters found"
+                Write-OptimizationLog "CIM: No active adapters detected" -Level "Debug"
+            }
+        }
+        catch {
+            $detectionMethods += "CIM Win32_NetworkAdapter: Failed - $($_.Exception.Message)"
+            Write-OptimizationLog "CIM Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # Method 4: Network Interface detection via .NET
+        Write-OptimizationLog "Method 4: Attempting .NET NetworkInterface detection" -Level "Debug"
+        try {
+            $networkInterfaces = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object {
+                $_.OperationalStatus -eq 'Up' -and $_.NetworkInterfaceType -ne 'Loopback' -and $_.NetworkInterfaceType -ne 'Tunnel'
+            }
+            if ($networkInterfaces -and $networkInterfaces.Count -gt 0) {
+                $netResults = $networkInterfaces | ForEach-Object {
+                    [PSCustomObject]@{
+                        Name = $_.Name
+                        InterfaceDescription = $_.Description
+                        LinkSpeed = $_.Speed
+                        MediaType = $_.NetworkInterfaceType.ToString()
+                        Status = 'Up'
+                        Method = '.NET NetworkInterface'
+                        InterfaceIndex = $null
+                    }
+                }
+                # Only add if we don't already have adapters
+                if ($detectedAdapters.Count -eq 0) {
+                    $detectedAdapters += $netResults
+                }
+                $detectionMethods += ".NET NetworkInterface: Found $($networkInterfaces.Count) adapter(s)"
+                Write-OptimizationLog ".NET NetworkInterface found $($networkInterfaces.Count) active adapter(s)" -Level "Debug"
+            } else {
+                $detectionMethods += ".NET NetworkInterface: No active adapters found"
+                Write-OptimizationLog ".NET NetworkInterface: No active adapters detected" -Level "Debug"
+            }
+        }
+        catch {
+            $detectionMethods += ".NET NetworkInterface: Failed - $($_.Exception.Message)"
+            Write-OptimizationLog ".NET NetworkInterface failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # Method 5: Registry-based detection (Last resort)
+        Write-OptimizationLog "Method 5: Attempting Registry-based detection" -Level "Debug"
+        try {
+            $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+            if (Test-Path $regPath) {
+                $regAdapters = Get-ChildItem $regPath | Where-Object {
+                    $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+                    $props -and $props.DriverDesc -and -not $props.DriverDesc.Contains('Virtual') -and -not $props.DriverDesc.Contains('Loopback')
+                }
+                if ($regAdapters -and $regAdapters.Count -gt 0) {
+                    $regResults = $regAdapters | ForEach-Object {
+                        $props = Get-ItemProperty $_.PSPath
+                        [PSCustomObject]@{
+                            Name = $props.DriverDesc
+                            InterfaceDescription = $props.DriverDesc
+                            LinkSpeed = $null
+                            MediaType = 'Registry-Detected'
+                            Status = 'Detected'
+                            Method = 'Registry'
+                            InterfaceIndex = $null
+                        }
+                    }
+                    # Only add if we don't already have adapters
+                    if ($detectedAdapters.Count -eq 0) {
+                        $detectedAdapters += $regResults
+                    }
+                    $detectionMethods += "Registry: Found $($regAdapters.Count) adapter(s)"
+                    Write-OptimizationLog "Registry found $($regAdapters.Count) adapter(s)" -Level "Debug"
+                } else {
+                    $detectionMethods += "Registry: No adapters found"
+                    Write-OptimizationLog "Registry: No adapters detected" -Level "Debug"
+                }
+            } else {
+                $detectionMethods += "Registry: Network adapter registry path not found"
+                Write-OptimizationLog "Registry: Network adapter registry path not accessible" -Level "Debug"
+            }
+        }
+        catch {
+            $detectionMethods += "Registry: Failed - $($_.Exception.Message)"
+            Write-OptimizationLog "Registry detection failed: $($_.Exception.Message)" -Level "Debug"
+        }
+        
+        # Remove duplicates and prepare final result
+        $uniqueAdapters = $detectedAdapters | Sort-Object Name -Unique
         
         $result = @{
-            Success = ($adapters -and $adapters.Count -gt 0)
-            Message = if ($adapters -and $adapters.Count -gt 0) { 
-                "Found $($adapters.Count) active network adapter(s)" 
+            Success = ($uniqueAdapters -and $uniqueAdapters.Count -gt 0)
+            Message = if ($uniqueAdapters -and $uniqueAdapters.Count -gt 0) { 
+                "Found $($uniqueAdapters.Count) active network adapter(s) using multiple detection methods" 
             } else { 
-                "No active network adapters found - optimizations may still be beneficial for future connections" 
+                "No active network adapters found despite comprehensive detection methods - system may have connectivity issues" 
             }
-            Adapters = if ($adapters) { $adapters | Select-Object Name, InterfaceDescription, LinkSpeed, MediaType } else { @() }
+            Adapters = $uniqueAdapters
+            DetectionMethods = $detectionMethods
         }
         
-        Write-OptimizationLog $result.Message -Level "Debug"
+        # Enhanced logging
+        Write-OptimizationLog "Network adapter detection completed: $($result.Message)" -Level "Info"
+        Write-OptimizationLog "Detection methods attempted: $($detectionMethods -join '; ')" -Level "Debug"
+        
+        if ($uniqueAdapters -and $uniqueAdapters.Count -gt 0) {
+            foreach ($adapter in $uniqueAdapters) {
+                Write-OptimizationLog "Detected adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
+            }
+        }
+        
         return $result
     }
     catch {
-        Write-OptimizationLog "Network adapter validation failed: $($_.Exception.Message)" -Level "Error"
+        $errorMessage = "Comprehensive network adapter detection failed: $($_.Exception.Message)"
+        Write-OptimizationLog $errorMessage -Level "Error"
         return @{
             Success = $false
-            Message = "Failed to enumerate network adapters: $($_.Exception.Message)"
+            Message = $errorMessage
             Adapters = @()
+            DetectionMethods = @("Critical failure in detection process")
         }
     }
 }
@@ -3427,7 +3606,7 @@ function Test-TCPIPOptimizationRequirements {
         $results.Tests += $registryTest
         if (-not $registryTest.Success) { $results.OverallSuccess = $false }
         
-        # Test network adapters
+        # Test network adapters using robust detection
         $adapterTest = @{
             Name = "Network Adapters"
             Success = $true
@@ -3435,36 +3614,27 @@ function Test-TCPIPOptimizationRequirements {
         }
         
         try {
-            $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
+            # Use the robust adapter detection function
+            $adapterResult = Test-NetworkAdapters
             
-            # Fallback to WMI if Get-NetAdapter fails
-            if ($null -eq $adapters -or $adapters.Count -eq 0) {
-                $wmiAdapters = Get-WmiObject -Class Win32_NetworkAdapter -ErrorAction SilentlyContinue | 
-                             Where-Object { $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true }
-                
-                if ($wmiAdapters -and $wmiAdapters.Count -gt 0) {
-                    $adapters = @($wmiAdapters)  # Ensure it's an array
+            if ($adapterResult.Success -and $adapterResult.Adapters.Count -gt 0) {
+                $adapterTest.Details += "[OK] Found $($adapterResult.Adapters.Count) active network adapter(s) using comprehensive detection"
+                foreach ($adapter in $adapterResult.Adapters) {
+                    $adapterTest.Details += "  - $($adapter.Name) ($($adapter.InterfaceDescription)) [Method: $($adapter.Method)]"
                 }
-            }
-            
-            if ($adapters -and $adapters.Count -gt 0) {
-                $adapterTest.Details += "[OK] Found $($adapters.Count) active network adapter(s)"
-                foreach ($adapter in $adapters) {
-                    $name = if ($adapter.Name) { $adapter.Name } else { $adapter.NetConnectionID }
-                    $description = if ($adapter.InterfaceDescription) { $adapter.InterfaceDescription } else { $adapter.Description }
-                    $adapterTest.Details += "  - $name ($description)"
-                }
+                $adapterTest.Details += "Detection methods used: $($adapterResult.DetectionMethods -join '; ')"
             } else {
-                # Don't fail completely - some optimizations can still be applied
-                $adapterTest.Success = $true  # Changed from $false to $true
-                $adapterTest.Details += "[WARN] No active network adapters found - optimizations will apply to future connections"
-                $results.Warnings += "No active network adapters detected - optimizations will be applied for future use"
+                # Still don't fail completely - optimizations can be applied for future use
+                $adapterTest.Success = $true
+                $adapterTest.Details += "[WARN] No active network adapters detected despite comprehensive detection"
+                $adapterTest.Details += "Detection methods attempted: $($adapterResult.DetectionMethods -join '; ')"
+                $results.Warnings += "No active network adapters detected using multiple detection methods - optimizations will apply to future connections"
             }
         }
         catch {
-            $adapterTest.Success = $false
-            $adapterTest.Details += "[FAIL] Failed to enumerate network adapters: $($_.Exception.Message)"
-            $results.Errors += "Network adapter enumeration failed"
+            $adapterTest.Success = $true  # Don't fail the entire validation
+            $adapterTest.Details += "[WARN] Network adapter detection failed: $($_.Exception.Message)"
+            $results.Warnings += "Network adapter detection failed - optimizations will be applied for future use"
         }
         
         $results.Tests += $adapterTest
