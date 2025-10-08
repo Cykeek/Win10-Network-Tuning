@@ -1,0 +1,16 @@
+# Ignore Kiro development specifications
+.kiro/
+
+# Ignore test artifacts and temporary files
+tests/
+*.log
+*.tmp
+*.temp
+
+# Ignore backup files
+*.bak
+*.backup
+
+# Ignore Windows system files
+Thumbs.db
+Desktop.ini
