@@ -1242,7 +1242,7 @@ function Test-NetworkAdapters {
                         InterfaceIndex = $_.InterfaceIndex
                     }
                 }
-                # Only add if we don't already have adapters from Get-NetAdapter
+                # Add WMI results if they provide additional adapters
                 if ($detectedAdapters.Count -eq 0) {
                     $detectedAdapters += $wmiResults
                 }
@@ -1276,7 +1276,7 @@ function Test-NetworkAdapters {
                         InterfaceIndex = $_.InterfaceIndex
                     }
                 }
-                # Only add if we don't already have adapters
+                # Add CIM results if they provide additional adapters
                 if ($detectedAdapters.Count -eq 0) {
                     $detectedAdapters += $cimResults
                 }
@@ -1310,10 +1310,8 @@ function Test-NetworkAdapters {
                         InterfaceIndex = $null
                     }
                 }
-                # Only add if we don't already have adapters
-                if ($detectedAdapters.Count -eq 0) {
-                    $detectedAdapters += $netResults
-                }
+                # Always add .NET results - they're reliable even with limited privileges
+                $detectedAdapters += $netResults
                 $detectionMethods += ".NET NetworkInterface: Found $($networkInterfaces.Count) adapter(s)"
                 Write-OptimizationLog ".NET NetworkInterface found $($networkInterfaces.Count) active adapter(s)" -Level "Debug"
             } else {
@@ -1369,7 +1367,22 @@ function Test-NetworkAdapters {
         }
         
         # Remove duplicates and prepare final result
-        $uniqueAdapters = $detectedAdapters | Sort-Object Name -Unique
+        Write-OptimizationLog "Before deduplication: Found $($detectedAdapters.Count) total adapter entries" -Level "Debug"
+        
+        # More robust deduplication based on interface description rather than just name
+        $uniqueAdapters = @()
+        $seenDescriptions = @()
+        
+        foreach ($adapter in $detectedAdapters) {
+            $key = if ($adapter.InterfaceDescription) { $adapter.InterfaceDescription } else { $adapter.Name }
+            if ($key -and $seenDescriptions -notcontains $key) {
+                $seenDescriptions += $key
+                $uniqueAdapters += $adapter
+                Write-OptimizationLog "Added unique adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
+            }
+        }
+        
+        Write-OptimizationLog "After deduplication: Found $($uniqueAdapters.Count) unique adapters" -Level "Debug"
         
         $result = @{
             Success = ($uniqueAdapters -and $uniqueAdapters.Count -gt 0)
@@ -1385,6 +1398,17 @@ function Test-NetworkAdapters {
         # Enhanced logging
         Write-OptimizationLog "Network adapter detection completed: $($result.Message)" -Level "Info"
         Write-OptimizationLog "Detection methods attempted: $($detectionMethods -join '; ')" -Level "Debug"
+        
+        # Special check for .NET NetworkInterface fallback
+        if ($uniqueAdapters.Count -eq 0) {
+            $netInterfaceCount = $detectionMethods | Where-Object { $_ -match "\.NET NetworkInterface: Found (\d+)" } | ForEach-Object { 
+                if ($_ -match "Found (\d+)") { [int]$matches[1] } else { 0 }
+            } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            
+            if ($netInterfaceCount -gt 0) {
+                Write-OptimizationLog "WARNING: .NET NetworkInterface found $netInterfaceCount adapter(s) but final result is empty - possible deduplication issue" -Level "Warning"
+            }
+        }
         
         if ($uniqueAdapters -and $uniqueAdapters.Count -gt 0) {
             foreach ($adapter in $uniqueAdapters) {
