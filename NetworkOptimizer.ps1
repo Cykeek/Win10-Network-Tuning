@@ -35,6 +35,10 @@
     iex (irm "https://raw.githubusercontent.com/user/NetworkOptimizer/main/NetworkOptimizer.ps1")
     Execute remotely from GitHub
 
+.EXAMPLE
+    iex "& { $(irm 'github-url') } -AutoPreview"
+    Execute remotely with automatic preview mode when not admin
+
 .NOTES
     Version:        1.0.0
     Author:         Network Optimizer Team
@@ -72,11 +76,14 @@ param(
         }
         return $true
     })]
-    [string]$LogPath
+    [string]$LogPath,
+    
+    [Parameter(HelpMessage = "Automatically enable preview mode when not running as administrator")]
+    [switch]$AutoPreview
 )
 
 #Requires -Version 5.1
-#Requires -RunAsAdministrator
+# Note: Administrator requirement checked dynamically for better remote execution support
 
 # Script metadata
 $Script:Version = "1.0.0"
@@ -92,6 +99,7 @@ $Script:BackupPath = $null
 $Script:BackupInfo = $null
 $Script:OptimizationResults = @()
 $Script:Config = $null
+$Script:AutoPreviewEnabled = $false
 
 #region Core Framework Functions
 
@@ -235,6 +243,14 @@ function Initialize-NetworkOptimizer {
     try {
         Write-Host "Initializing Network Optimizer v$Script:Version..." -ForegroundColor Cyan
         
+        # Auto-enable WhatIf if not running as admin and AutoPreview is enabled
+        if ($AutoPreview -and -not (Test-AdministratorPrivileges)) {
+            Write-Host "Not running as administrator - enabling preview mode automatically" -ForegroundColor Yellow
+            $WhatIfPreference = $true
+            $PSBoundParameters['WhatIf'] = $true
+            $Script:AutoPreviewEnabled = $true
+        }
+        
         # Set up logging first
         if (-not $LogPath) {
             $Script:LogFile = Join-Path $PWD "NetworkOptimizer_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
@@ -250,7 +266,44 @@ function Initialize-NetworkOptimizer {
         $safetyValidation = Test-SafetyValidation
         
         if (-not $safetyValidation.OverallSuccess) {
-            throw "Safety validation failed. Critical issues must be resolved before proceeding."
+            Write-Host "`n" + "="*80 -ForegroundColor Red
+            Write-Host "SAFETY VALIDATION FAILED" -ForegroundColor Red
+            Write-Host "="*80 -ForegroundColor Red
+            
+            # Check if this looks like a remote execution scenario
+            $isRemoteExecution = ($MyInvocation.InvocationName -eq '&' -or $MyInvocation.Line -match 'irm|Invoke-RestMethod')
+            
+            if ($isRemoteExecution -and -not (Test-AdministratorPrivileges)) {
+                Write-Host "`nYou appear to be running this script remotely without administrator privileges." -ForegroundColor Yellow
+                Write-Host "`nFor remote execution with administrator privileges, use:" -ForegroundColor Cyan
+                Write-Host "Start-Process PowerShell -Verb RunAs -ArgumentList '-Command `"iex (irm \`"https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1\`")`"'" -ForegroundColor Green
+                Write-Host "`nFor remote preview mode (recommended for testing), use:" -ForegroundColor Cyan
+                Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -AutoPreview`"" -ForegroundColor Green
+                Write-Host "`nFor manual preview mode, use:" -ForegroundColor Cyan
+                Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -WhatIf`"" -ForegroundColor Green
+                Write-Host "`nFor local execution with admin privileges:" -ForegroundColor Cyan
+                Write-Host "Right-click PowerShell -> Run as Administrator, then run the command again" -ForegroundColor Green
+            } else {
+                Write-Host "`nTo proceed, you need to:" -ForegroundColor Yellow
+                Write-Host "1. Run PowerShell as Administrator" -ForegroundColor White
+                Write-Host "2. Ensure you have an active network connection" -ForegroundColor White
+                Write-Host "3. For testing only, add -WhatIf parameter" -ForegroundColor White
+            }
+            
+            Write-Host "`nDetailed errors:" -ForegroundColor Red
+            foreach ($error in $safetyValidation.Errors) {
+                Write-Host "  • $error" -ForegroundColor Red
+            }
+            
+            if ($safetyValidation.Warnings.Count -gt 0) {
+                Write-Host "`nWarnings:" -ForegroundColor Yellow
+                foreach ($warning in $safetyValidation.Warnings) {
+                    Write-Host "  • $warning" -ForegroundColor Yellow
+                }
+            }
+            
+            Write-Host "`n" + "="*80 -ForegroundColor Red
+            throw "Safety validation failed. Please follow the guidance above to resolve the issues."
         }
         
         # Create backup directory for safety
@@ -2655,7 +2708,7 @@ function Test-ConfigurationIntegrity {
         
         # Validate option requirements (skip in WhatIf mode for admin requirements)
         foreach ($option in $Config.Options) {
-            $skipAdminCheck = $WhatIfPreference -or ($PSBoundParameters.ContainsKey('WhatIf'))
+            $skipAdminCheck = $WhatIfPreference -or ($PSBoundParameters.ContainsKey('WhatIf')) -or $Script:AutoPreviewEnabled
             
             $requirementsValid = $true
             foreach ($requirement in $option.Requirements) {
