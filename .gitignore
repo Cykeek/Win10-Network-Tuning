@@ -1,6 +1,9 @@
 # Ignore Kiro development specifications
 .kiro/
 
+# Ignore GitHub folder
+.github/
+
 # Ignore test artifacts and temporary files
 tests/
 *.log
