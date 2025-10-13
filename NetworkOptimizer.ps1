@@ -270,44 +270,49 @@ function Initialize-NetworkOptimizer {
         $safetyValidation = Test-SafetyValidation
         
         if (-not $safetyValidation.OverallSuccess) {
-            Write-Host "`n" + "="*80 -ForegroundColor Red
-            Write-Host "SAFETY VALIDATION FAILED" -ForegroundColor Red
-            Write-Host "="*80 -ForegroundColor Red
+            # Check if this is primarily an administrator privileges issue
+            $isAdminIssue = $safetyValidation.Errors -match "Administrator privileges required"
+            $isRemoteExecution = ($MyInvocation.InvocationName -eq '&' -or $MyInvocation.Line -match 'irm|Invoke-RestMethod|github|raw\.githubusercontent')
             
-            # Check if this looks like a remote execution scenario
-            $isRemoteExecution = ($MyInvocation.InvocationName -eq '&' -or $MyInvocation.Line -match 'irm|Invoke-RestMethod')
-            
-            if ($isRemoteExecution -and -not (Test-AdministratorPrivileges)) {
-                Write-Host "`nYou appear to be running this script remotely without administrator privileges." -ForegroundColor Yellow
-                Write-Host "`nFor remote execution with administrator privileges, use:" -ForegroundColor Cyan
-                Write-Host "Start-Process PowerShell -Verb RunAs -ArgumentList '-Command `"iex (irm \`"https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1\`")`"'" -ForegroundColor Green
-                Write-Host "`nFor remote preview mode (recommended for testing), use:" -ForegroundColor Cyan
-                Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -AutoPreview`"" -ForegroundColor Green
-                Write-Host "`nFor manual preview mode, use:" -ForegroundColor Cyan
-                Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -WhatIf`"" -ForegroundColor Green
-                Write-Host "`nFor local execution with admin privileges:" -ForegroundColor Cyan
-                Write-Host "Right-click PowerShell -> Run as Administrator, then run the command again" -ForegroundColor Green
+            if ($isAdminIssue -and $isAdminIssue.Count -eq $safetyValidation.Errors.Count) {
+                # Concise admin privileges error
+                Write-Host "`n⚠️  Administrator privileges required" -ForegroundColor Yellow
+                
+                if ($isRemoteExecution) {
+                    Write-Host "`nQuick fix - Run as admin:" -ForegroundColor Cyan
+                    Write-Host "Start-Process PowerShell -Verb RunAs -ArgumentList '-Command `"iex (irm \`"https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1\`")`"'" -ForegroundColor Green
+                    Write-Host "`nOr test first (preview mode):" -ForegroundColor Cyan
+                    Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -WhatIf`"" -ForegroundColor Green
+                } else {
+                    Write-Host "Right-click PowerShell → 'Run as Administrator', then try again" -ForegroundColor Cyan
+                    Write-Host "Or add -WhatIf to preview changes without admin rights" -ForegroundColor Cyan
+                }
             } else {
-                Write-Host "`nTo proceed, you need to:" -ForegroundColor Yellow
+                # Multiple issues - show detailed error
+                Write-Host "`n" + "="*60 -ForegroundColor Red
+                Write-Host "SAFETY VALIDATION FAILED" -ForegroundColor Red
+                Write-Host "="*60 -ForegroundColor Red
+                
+                Write-Host "`nIssues found:" -ForegroundColor Red
+                foreach ($error in $safetyValidation.Errors) {
+                    Write-Host "  • $error" -ForegroundColor Red
+                }
+                
+                if ($safetyValidation.Warnings.Count -gt 0) {
+                    Write-Host "`nWarnings:" -ForegroundColor Yellow
+                    foreach ($warning in $safetyValidation.Warnings) {
+                        Write-Host "  • $warning" -ForegroundColor Yellow
+                    }
+                }
+                
+                Write-Host "`nTo proceed:" -ForegroundColor Yellow
                 Write-Host "1. Run PowerShell as Administrator" -ForegroundColor White
                 Write-Host "2. Ensure you have an active network connection" -ForegroundColor White
                 Write-Host "3. For testing only, add -WhatIf parameter" -ForegroundColor White
+                Write-Host "="*60 -ForegroundColor Red
             }
             
-            Write-Host "`nDetailed errors:" -ForegroundColor Red
-            foreach ($error in $safetyValidation.Errors) {
-                Write-Host "  • $error" -ForegroundColor Red
-            }
-            
-            if ($safetyValidation.Warnings.Count -gt 0) {
-                Write-Host "`nWarnings:" -ForegroundColor Yellow
-                foreach ($warning in $safetyValidation.Warnings) {
-                    Write-Host "  • $warning" -ForegroundColor Yellow
-                }
-            }
-            
-            Write-Host "`n" + "="*80 -ForegroundColor Red
-            throw "Safety validation failed. Please follow the guidance above to resolve the issues."
+            throw "Network Optimizer requires administrator privileges to modify system settings."
         }
         
         # Create backup directory for safety
@@ -1054,19 +1059,10 @@ function Test-SafetyValidation {
         Write-OptimizationLog "Safety validation completed: $successCount/$totalChecks checks passed" -Level "Info"
         
         if ($validationResults.OverallSuccess) {
-            Write-Host "Safety validation passed: All critical checks successful" -ForegroundColor Green
+            Write-Host "✅ Safety validation passed" -ForegroundColor Green
         } else {
-            Write-Host "Safety validation failed: Critical issues detected" -ForegroundColor Red
-            foreach ($error in $validationResults.Errors) {
-                Write-Host "  ERROR: $error" -ForegroundColor Red
-            }
-        }
-        
-        if ($validationResults.Warnings.Count -gt 0) {
-            Write-Host "Warnings detected:" -ForegroundColor Yellow
-            foreach ($warning in $validationResults.Warnings) {
-                Write-Host "  WARNING: $warning" -ForegroundColor Yellow
-            }
+            # Let the calling function handle detailed error display
+            Write-OptimizationLog "Safety validation failed: $($validationResults.Errors.Count) errors, $($validationResults.Warnings.Count) warnings" -Level "Warning"
         }
         
         return $validationResults
@@ -7404,20 +7400,16 @@ function Start-NetworkOptimizer {
         Write-OptimizationLog "Network Optimizer execution completed successfully" -Level "Info"
     }
     catch {
-        $errorMessage = "Network Optimizer execution failed: $($_.Exception.Message)"
-        Write-Error $errorMessage
-        Write-OptimizationLog $errorMessage -Level "Error"
+        $errorMessage = $_.Exception.Message
+        Write-OptimizationLog "Network Optimizer execution failed: $errorMessage" -Level "Error"
         
-        # Display error information
-        Write-Host @"
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                   ERROR                                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-$errorMessage
-
-For troubleshooting information, check the log file: $Script:LogFile
-"@ -ForegroundColor Red
+        # Display concise error
+        if ($errorMessage -match "administrator privileges") {
+            Write-Error $errorMessage
+        } else {
+            Write-Host "`n❌ Error: $errorMessage" -ForegroundColor Red
+            Write-Host "Check log file for details: $Script:LogFile" -ForegroundColor Gray
+        }
         
         exit 1
     }
