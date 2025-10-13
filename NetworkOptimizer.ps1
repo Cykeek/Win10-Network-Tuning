@@ -10018,10 +10018,10 @@ function Start-InteractiveMenu {
                         continue
                     }
                     
-                    if ($selection[0] -match '^\d+$') {
+                    if ($validNumbers -contains $selection[0]) {
                         # Handle numeric selections (toggle optimization selection)
                         foreach ($sel in $selection) {
-                            if ($sel -match '^\d+$') {
+                            if ($validNumbers -contains $sel) {
                                 $optionIndex = [int]$sel - 1
                                 if ($optionIndex -ge 0 -and $optionIndex -lt $categoryOptions.Count) {
                                     $categoryOptions[$optionIndex].Selected = -not $categoryOptions[$optionIndex].Selected
