@@ -286,7 +286,7 @@ function Initialize-NetworkOptimizer {
             } else {
                 # Multiple issues - show concise error
                 Write-Host "`n❌ Safety validation failed ($($safetyValidation.Errors.Count) errors, $($safetyValidation.Warnings.Count) warnings)" -ForegroundColor Red
-                foreach ($error in $safetyValidation.Errors) {
+                foreach ($errItem in $safetyValidation.Errors) {
                     Write-Host "   • $error" -ForegroundColor Red
                 }
                 if ($safetyValidation.Warnings.Count -gt 0) {
@@ -560,7 +560,7 @@ function New-SystemRestorePoint {
         }
         
         # Create the restore point
-        $restorePointResult = Checkpoint-Computer -Description $Description -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
+    Checkpoint-Computer -Description $Description -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
         
         # Verify restore point creation
         Start-Sleep -Seconds 2
@@ -654,7 +654,7 @@ Windows Registry Editor Version 5.00
         
         # Process each registry category
         foreach ($category in $registryConfig.Keys) {
-            Write-OptimizationLog "Backing up registry category: $category" -Level "Debug"
+            # Write-OptimizationLog "Backing up registry category: $category" -Level "Debug"
             $regContent += "`r`n; === $category Settings ===`r`n"
             
             foreach ($registryPath in $registryConfig[$category].Keys) {
@@ -686,7 +686,7 @@ Windows Registry Editor Version 5.00
                                         $regContent += "`"$valueName`"=`"$value`"`r`n"
                                     }
                                 } else {
-                                    Write-OptimizationLog "Registry value not found: $registryPath\$valueName" -Level "Debug"
+                                    # Write-OptimizationLog "Registry value not found: $registryPath\$valueName" -Level "Debug"
                                 }
                             }
                             catch {
@@ -694,7 +694,7 @@ Windows Registry Editor Version 5.00
                             }
                         }
                     } else {
-                        Write-OptimizationLog "Registry path not found: $registryPath" -Level "Debug"
+                        # Write-OptimizationLog "Registry path not found: $registryPath" -Level "Debug"
                         $regContent += "`r`n; Path not found: $registryPath`r`n"
                     }
                 }
@@ -833,12 +833,12 @@ function Restore-NetworkSettings {
         
         foreach ($registryPath in $registryValues.Keys) {
             try {
-                Write-OptimizationLog "Restoring registry path: $registryPath" -Level "Debug"
+                # Write-OptimizationLog "Restoring registry path: $registryPath" -Level "Debug"
                 
                 # Ensure registry path exists
                 if (-not (Test-Path $registryPath)) {
                     New-Item -Path $registryPath -Force | Out-Null
-                    Write-OptimizationLog "Created registry path: $registryPath" -Level "Debug"
+                    # Write-OptimizationLog "Created registry path: $registryPath" -Level "Debug"
                 }
                 
                 # Restore each value
@@ -847,7 +847,7 @@ function Restore-NetworkSettings {
                         $value = $registryValues[$registryPath][$valueName]
                         Set-ItemProperty -Path $registryPath -Name $valueName -Value $value -Force
                         $restoredCount++
-                        Write-OptimizationLog "Restored: $registryPath\$valueName = $value" -Level "Debug"
+                        # Write-OptimizationLog "Restored: $registryPath\$valueName = $value" -Level "Debug"
                     }
                     catch {
                         $errorCount++
@@ -912,7 +912,7 @@ function Test-SafetyValidation {
         }
         
         # Check 1: Administrator privileges
-        Write-OptimizationLog "Validating administrator privileges" -Level "Debug"
+    # Write-OptimizationLog "Validating administrator privileges" -Level "Debug"
         $adminCheck = Test-AdministratorPrivileges
         $validationResults.Checks["AdminPrivileges"] = @{
             Success = $adminCheck
@@ -929,7 +929,7 @@ function Test-SafetyValidation {
         }
         
         # Check 2: Windows version compatibility
-        Write-OptimizationLog "Validating Windows version compatibility" -Level "Debug"
+    # Write-OptimizationLog "Validating Windows version compatibility" -Level "Debug"
         $windowsCheck = Test-WindowsVersion
         $validationResults.Checks["WindowsVersion"] = @{
             Success = $windowsCheck
@@ -941,7 +941,7 @@ function Test-SafetyValidation {
         }
         
         # Check 3: PowerShell version compatibility
-        Write-OptimizationLog "Validating PowerShell version compatibility" -Level "Debug"
+    # Write-OptimizationLog "Validating PowerShell version compatibility" -Level "Debug"
         $psCheck = Test-PowerShellVersion
         $validationResults.Checks["PowerShellVersion"] = @{
             Success = $psCheck
@@ -953,7 +953,7 @@ function Test-SafetyValidation {
         }
         
         # Check 4: Registry access validation
-        Write-OptimizationLog "Validating registry access permissions" -Level "Debug"
+    # Write-OptimizationLog "Validating registry access permissions" -Level "Debug"
         $registryCheck = Test-RegistryAccess
         $validationResults.Checks["RegistryAccess"] = @{
             Success = $registryCheck
@@ -970,7 +970,7 @@ function Test-SafetyValidation {
         }
         
         # Check 5: Network adapters presence
-        Write-OptimizationLog "Validating network adapters" -Level "Debug"
+    # Write-OptimizationLog "Validating network adapters" -Level "Debug"
         $networkCheck = Test-NetworkAdapters
         $validationResults.Checks["NetworkAdapters"] = @{
             Success = $networkCheck.Success
@@ -984,7 +984,7 @@ function Test-SafetyValidation {
         }
         
         # Check 6: System restore capability
-        Write-OptimizationLog "Validating system restore capability" -Level "Debug"
+    # Write-OptimizationLog "Validating system restore capability" -Level "Debug"
         $restoreCheck = Test-SystemRestoreCapability
         $validationResults.Checks["SystemRestore"] = @{
             Success = $restoreCheck
@@ -995,7 +995,7 @@ function Test-SafetyValidation {
         }
         
         # Check 7: Backup directory access
-        Write-OptimizationLog "Validating backup directory access" -Level "Debug"
+    # Write-OptimizationLog "Validating backup directory access" -Level "Debug"
         $backupCheck = Test-BackupDirectoryAccess
         $validationResults.Checks["BackupAccess"] = @{
             Success = $backupCheck.Success
@@ -1008,7 +1008,7 @@ function Test-SafetyValidation {
         }
         
         # Check 8: System stability indicators
-        Write-OptimizationLog "Validating system stability indicators" -Level "Debug"
+    # Write-OptimizationLog "Validating system stability indicators" -Level "Debug"
         $stabilityCheck = Test-SystemStability
         $validationResults.Checks["SystemStability"] = @{
             Success = $stabilityCheck.Success
@@ -1020,7 +1020,7 @@ function Test-SafetyValidation {
         }
         
         # Check 9: TCP/IP optimization requirements
-        Write-OptimizationLog "Validating TCP/IP optimization requirements" -Level "Debug"
+    # Write-OptimizationLog "Validating TCP/IP optimization requirements" -Level "Debug"
         $tcpipCheck = Test-TCPIPOptimizationRequirements
         $validationResults.Checks["TCPIPRequirements"] = @{
             Success = $tcpipCheck.OverallSuccess
@@ -1028,7 +1028,7 @@ function Test-SafetyValidation {
             Details = $tcpipCheck.Tests
         }
         if (-not $tcpipCheck.OverallSuccess) {
-            foreach ($error in $tcpipCheck.Errors) {
+            foreach ($errItem in $tcpipCheck.Errors) {
                 $validationResults.Errors += "TCP/IP validation: $error"
             }
             $validationResults.OverallSuccess = $false
@@ -1096,7 +1096,7 @@ function Test-RegistryAccess {
             if (-not (Test-Path $path)) {
                 # Some paths like Psched policy path may not exist and that's okay
                 if ($path -like "*Policies*") {
-                    Write-OptimizationLog "Registry policy path doesn't exist (will be created if needed): $path" -Level "Debug"
+                    # Write-OptimizationLog "Registry policy path doesn't exist (will be created if needed): $path" -Level "Debug"
                     continue
                 } else {
                     Write-OptimizationLog "Critical registry path not accessible: $path" -Level "Warning"
@@ -1107,7 +1107,7 @@ function Test-RegistryAccess {
             # Test read access for existing paths
             try {
                 Get-ItemProperty -Path $path -ErrorAction Stop | Out-Null
-                Write-OptimizationLog "Registry access confirmed for: $path" -Level "Debug"
+                # Write-OptimizationLog "Registry access confirmed for: $path" -Level "Debug"
             }
             catch {
                 Write-OptimizationLog "Registry read access denied: $path" -Level "Warning"
@@ -1115,7 +1115,7 @@ function Test-RegistryAccess {
             }
         }
         
-        Write-OptimizationLog "Registry access validation successful" -Level "Debug"
+    # Write-OptimizationLog "Registry access validation successful" -Level "Debug"
         return $true
     }
     catch {
@@ -1144,18 +1144,18 @@ function Test-NetworkAdapters {
         $detectedAdapters = @()
         $detectionMethods = @()
         
-        Write-OptimizationLog "Starting comprehensive network adapter detection" -Level "Debug"
+    # Write-OptimizationLog "Starting comprehensive network adapter detection" -Level "Debug"
         
         # Method 1: Get-NetAdapter (Modern PowerShell)
-        Write-OptimizationLog "Method 1: Attempting Get-NetAdapter detection" -Level "Debug"
+    # Write-OptimizationLog "Method 1: Attempting Get-NetAdapter detection" -Level "Debug"
         try {
             $netAdapters = Get-NetAdapter -ErrorAction Stop | Where-Object { 
                 $_.Status -eq 'Up' -and $_.Virtual -eq $false -and $_.Hidden -eq $false 
             }
-            Write-OptimizationLog "Get-NetAdapter returned $($netAdapters.Count) filtered adapters" -Level "Debug"
+            # Write-OptimizationLog "Get-NetAdapter returned $($netAdapters.Count) filtered adapters" -Level "Debug"
             if ($netAdapters -and $netAdapters.Count -gt 0) {
                 $detectedAdapters += $netAdapters | ForEach-Object {
-                    Write-OptimizationLog "Found adapter via Get-NetAdapter: $($_.Name) - $($_.InterfaceDescription)" -Level "Debug"
+                    # Write-OptimizationLog "Found adapter via Get-NetAdapter: $($_.Name) - $($_.InterfaceDescription)" -Level "Debug"
                     [PSCustomObject]@{
                         Name = $_.Name
                         InterfaceDescription = $_.InterfaceDescription
@@ -1167,27 +1167,27 @@ function Test-NetworkAdapters {
                     }
                 }
                 $detectionMethods += "Get-NetAdapter: Found $($netAdapters.Count) adapter(s)"
-                Write-OptimizationLog "Get-NetAdapter found $($netAdapters.Count) active adapter(s)" -Level "Debug"
+                # Write-OptimizationLog "Get-NetAdapter found $($netAdapters.Count) active adapter(s)" -Level "Debug"
             } else {
                 $detectionMethods += "Get-NetAdapter: No active adapters found"
-                Write-OptimizationLog "Get-NetAdapter: No active adapters detected after filtering" -Level "Debug"
+                # Write-OptimizationLog "Get-NetAdapter: No active adapters detected after filtering" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += "Get-NetAdapter: Failed - $($_.Exception.Message)"
-            Write-OptimizationLog "Get-NetAdapter failed: $($_.Exception.Message)" -Level "Debug"
+            # Write-OptimizationLog "Get-NetAdapter failed: $($_.Exception.Message)" -Level "Debug"
         }
         
         # If no adapters found with strict filtering, try relaxed filtering
         if ($detectedAdapters.Count -eq 0) {
-            Write-OptimizationLog "No adapters found with strict filtering, trying relaxed filtering" -Level "Debug"
+            # Write-OptimizationLog "No adapters found with strict filtering, trying relaxed filtering" -Level "Debug"
             
             # Method 1b: Get-NetAdapter with relaxed filtering (allow virtual/hidden if they're the only ones)
             try {
                 $relaxedAdapters = Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' }
                 if ($relaxedAdapters -and $relaxedAdapters.Count -gt 0) {
                     $detectedAdapters += $relaxedAdapters | ForEach-Object {
-                        Write-OptimizationLog "Found adapter via relaxed filtering: $($_.Name) - $($_.InterfaceDescription) (Virtual:$($_.Virtual) Hidden:$($_.Hidden))" -Level "Debug"
+                        # Write-OptimizationLog "Found adapter via relaxed filtering: $($_.Name) - $($_.InterfaceDescription) (Virtual:$($_.Virtual) Hidden:$($_.Hidden))" -Level "Debug"
                         [PSCustomObject]@{
                             Name = $_.Name
                             InterfaceDescription = $_.InterfaceDescription
@@ -1199,16 +1199,16 @@ function Test-NetworkAdapters {
                         }
                     }
                     $detectionMethods += "Get-NetAdapter-Relaxed: Found $($relaxedAdapters.Count) adapter(s)"
-                    Write-OptimizationLog "Relaxed filtering found $($relaxedAdapters.Count) active adapter(s)" -Level "Debug"
+                    # Write-OptimizationLog "Relaxed filtering found $($relaxedAdapters.Count) active adapter(s)" -Level "Debug"
                 }
             }
             catch {
-                Write-OptimizationLog "Relaxed Get-NetAdapter also failed: $($_.Exception.Message)" -Level "Debug"
+                # Write-OptimizationLog "Relaxed Get-NetAdapter also failed: $($_.Exception.Message)" -Level "Debug"
             }
         }
         
         # Method 2: WMI Win32_NetworkAdapter (Fallback)
-        Write-OptimizationLog "Method 2: Attempting WMI Win32_NetworkAdapter detection" -Level "Debug"
+    # Write-OptimizationLog "Method 2: Attempting WMI Win32_NetworkAdapter detection" -Level "Debug"
         try {
             $wmiAdapters = Get-WmiObject -Class Win32_NetworkAdapter -ErrorAction Stop | Where-Object { 
                 $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true -and $_.PhysicalAdapter -eq $true
@@ -1230,19 +1230,19 @@ function Test-NetworkAdapters {
                     $detectedAdapters += $wmiResults
                 }
                 $detectionMethods += "WMI Win32_NetworkAdapter: Found $($wmiAdapters.Count) adapter(s)"
-                Write-OptimizationLog "WMI found $($wmiAdapters.Count) active adapter(s)" -Level "Debug"
+                # Write-OptimizationLog "WMI found $($wmiAdapters.Count) active adapter(s)" -Level "Debug"
             } else {
                 $detectionMethods += "WMI Win32_NetworkAdapter: No active adapters found"
-                Write-OptimizationLog "WMI: No active adapters detected" -Level "Debug"
+                # Write-OptimizationLog "WMI: No active adapters detected" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += "WMI Win32_NetworkAdapter: Failed - $($_.Exception.Message)"
-            Write-OptimizationLog "WMI Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
+            # Write-OptimizationLog "WMI Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
         }
         
         # Method 3: CIM Instance (Alternative)
-        Write-OptimizationLog "Method 3: Attempting CIM Win32_NetworkAdapter detection" -Level "Debug"
+    # Write-OptimizationLog "Method 3: Attempting CIM Win32_NetworkAdapter detection" -Level "Debug"
         try {
             $cimAdapters = Get-CimInstance -ClassName Win32_NetworkAdapter -ErrorAction Stop | Where-Object { 
                 $_.NetConnectionStatus -eq 2 -and $_.NetEnabled -eq $true
@@ -1264,19 +1264,19 @@ function Test-NetworkAdapters {
                     $detectedAdapters += $cimResults
                 }
                 $detectionMethods += "CIM Win32_NetworkAdapter: Found $($cimAdapters.Count) adapter(s)"
-                Write-OptimizationLog "CIM found $($cimAdapters.Count) active adapter(s)" -Level "Debug"
+                # Write-OptimizationLog "CIM found $($cimAdapters.Count) active adapter(s)" -Level "Debug"
             } else {
                 $detectionMethods += "CIM Win32_NetworkAdapter: No active adapters found"
-                Write-OptimizationLog "CIM: No active adapters detected" -Level "Debug"
+                # Write-OptimizationLog "CIM: No active adapters detected" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += "CIM Win32_NetworkAdapter: Failed - $($_.Exception.Message)"
-            Write-OptimizationLog "CIM Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
+            # Write-OptimizationLog "CIM Win32_NetworkAdapter failed: $($_.Exception.Message)" -Level "Debug"
         }
         
         # Method 4: Network Interface detection via .NET
-        Write-OptimizationLog "Method 4: Attempting .NET NetworkInterface detection" -Level "Debug"
+    # Write-OptimizationLog "Method 4: Attempting .NET NetworkInterface detection" -Level "Debug"
         try {
             $networkInterfaces = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object {
                 $_.OperationalStatus -eq 'Up' -and $_.NetworkInterfaceType -ne 'Loopback' -and $_.NetworkInterfaceType -ne 'Tunnel'
@@ -1296,19 +1296,19 @@ function Test-NetworkAdapters {
                 # Always add .NET results - they're reliable even with limited privileges
                 $detectedAdapters += $netResults
                 $detectionMethods += ".NET NetworkInterface: Found $($networkInterfaces.Count) adapter(s)"
-                Write-OptimizationLog ".NET NetworkInterface found $($networkInterfaces.Count) active adapter(s)" -Level "Debug"
+                # Write-OptimizationLog ".NET NetworkInterface found $($networkInterfaces.Count) active adapter(s)" -Level "Debug"
             } else {
                 $detectionMethods += ".NET NetworkInterface: No active adapters found"
-                Write-OptimizationLog ".NET NetworkInterface: No active adapters detected" -Level "Debug"
+                # Write-OptimizationLog ".NET NetworkInterface: No active adapters detected" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += ".NET NetworkInterface: Failed - $($_.Exception.Message)"
-            Write-OptimizationLog ".NET NetworkInterface failed: $($_.Exception.Message)" -Level "Debug"
+            # Write-OptimizationLog ".NET NetworkInterface failed: $($_.Exception.Message)" -Level "Debug"
         }
         
         # Method 5: Registry-based detection (Last resort)
-        Write-OptimizationLog "Method 5: Attempting Registry-based detection" -Level "Debug"
+    # Write-OptimizationLog "Method 5: Attempting Registry-based detection" -Level "Debug"
         try {
             $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}"
             if (Test-Path $regPath) {
@@ -1334,23 +1334,23 @@ function Test-NetworkAdapters {
                         $detectedAdapters += $regResults
                     }
                     $detectionMethods += "Registry: Found $($regAdapters.Count) adapter(s)"
-                    Write-OptimizationLog "Registry found $($regAdapters.Count) adapter(s)" -Level "Debug"
+                    # Write-OptimizationLog "Registry found $($regAdapters.Count) adapter(s)" -Level "Debug"
                 } else {
                     $detectionMethods += "Registry: No adapters found"
-                    Write-OptimizationLog "Registry: No adapters detected" -Level "Debug"
+                    # Write-OptimizationLog "Registry: No adapters detected" -Level "Debug"
                 }
             } else {
                 $detectionMethods += "Registry: Network adapter registry path not found"
-                Write-OptimizationLog "Registry: Network adapter registry path not accessible" -Level "Debug"
+                # Write-OptimizationLog "Registry: Network adapter registry path not accessible" -Level "Debug"
             }
         }
         catch {
             $detectionMethods += "Registry: Failed - $($_.Exception.Message)"
-            Write-OptimizationLog "Registry detection failed: $($_.Exception.Message)" -Level "Debug"
+            # Write-OptimizationLog "Registry detection failed: $($_.Exception.Message)" -Level "Debug"
         }
         
         # Remove duplicates and prepare final result
-        Write-OptimizationLog "Before deduplication: Found $($detectedAdapters.Count) total adapter entries" -Level "Debug"
+    # Write-OptimizationLog "Before deduplication: Found $($detectedAdapters.Count) total adapter entries" -Level "Debug"
         
         # More robust deduplication based on interface description rather than just name
         $uniqueAdapters = @()
@@ -1361,11 +1361,11 @@ function Test-NetworkAdapters {
             if ($key -and $seenDescriptions -notcontains $key) {
                 $seenDescriptions += $key
                 $uniqueAdapters += $adapter
-                Write-OptimizationLog "Added unique adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
+                # Write-OptimizationLog "Added unique adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
             }
         }
         
-        Write-OptimizationLog "After deduplication: Found $($uniqueAdapters.Count) unique adapters" -Level "Debug"
+    # Write-OptimizationLog "After deduplication: Found $($uniqueAdapters.Count) unique adapters" -Level "Debug"
         
         $result = @{
             Success = ($uniqueAdapters -and $uniqueAdapters.Count -gt 0)
@@ -1380,7 +1380,7 @@ function Test-NetworkAdapters {
         
         # Enhanced logging
         Write-OptimizationLog "Network adapter detection completed: $($result.Message)" -Level "Info"
-        Write-OptimizationLog "Detection methods attempted: $($detectionMethods -join '; ')" -Level "Debug"
+    # Write-OptimizationLog "Detection methods attempted: $($detectionMethods -join '; ')" -Level "Debug"
         
         # Special check for .NET NetworkInterface fallback
         if ($uniqueAdapters.Count -eq 0) {
@@ -1395,7 +1395,7 @@ function Test-NetworkAdapters {
         
         if ($uniqueAdapters -and $uniqueAdapters.Count -gt 0) {
             foreach ($adapter in $uniqueAdapters) {
-                Write-OptimizationLog "Detected adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
+                # Write-OptimizationLog "Detected adapter: $($adapter.Name) ($($adapter.InterfaceDescription)) via $($adapter.Method)" -Level "Debug"
             }
         }
         
@@ -1433,30 +1433,30 @@ function Test-SystemRestoreCapability {
         # Check Volume Shadow Copy Service
         $vssService = Get-Service -Name "VSS" -ErrorAction SilentlyContinue
         if ($null -eq $vssService -or $vssService.Status -ne "Running") {
-            Write-OptimizationLog "Volume Shadow Copy Service not running" -Level "Debug"
+            # Write-OptimizationLog "Volume Shadow Copy Service not running" -Level "Debug"
             return $false
         }
         
         # Check System Restore Service
         $srService = Get-Service -Name "swprv" -ErrorAction SilentlyContinue
         if ($null -eq $srService) {
-            Write-OptimizationLog "System Restore service not available" -Level "Debug"
+            # Write-OptimizationLog "System Restore service not available" -Level "Debug"
             return $false
         }
         
         # Try to get existing restore points to verify functionality
         try {
             Get-ComputerRestorePoint -ErrorAction Stop | Out-Null
-            Write-OptimizationLog "System restore capability confirmed" -Level "Debug"
+            # Write-OptimizationLog "System restore capability confirmed" -Level "Debug"
             return $true
         }
         catch {
-            Write-OptimizationLog "System restore not enabled or accessible" -Level "Debug"
+            # Write-OptimizationLog "System restore not enabled or accessible" -Level "Debug"
             return $false
         }
     }
     catch {
-        Write-OptimizationLog "System restore capability check failed: $($_.Exception.Message)" -Level "Debug"
+    # Write-OptimizationLog "System restore capability check failed: $($_.Exception.Message)" -Level "Debug"
         return $false
     }
 }
@@ -1473,7 +1473,7 @@ function Test-BackupDirectoryAccess {
     .OUTPUTS
         [hashtable] Backup directory access validation results
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     [OutputType([hashtable])]
     param()
     
@@ -1492,7 +1492,7 @@ function Test-BackupDirectoryAccess {
                 "Test" | Out-File -FilePath $testFile -Force
                 
                 # Test file reading
-                $content = Get-Content -Path $testFile
+                Get-Content -Path $testFile | Out-Null
                 
                 # Cleanup
                 Remove-Item -Path $testPath -Recurse -Force
@@ -1599,7 +1599,7 @@ function Test-SystemStability {
             Issues = $stabilityIssues
         }
         
-        Write-OptimizationLog "System stability check: $($result.Message)" -Level "Debug"
+    # Write-OptimizationLog "System stability check: $($result.Message)" -Level "Debug"
         return $result
     }
     catch {
@@ -1874,7 +1874,7 @@ class OptimizationOption {
                 return $true
             }
             
-            $result = & $this.Action
+            & $this.Action
             Write-OptimizationLog "Optimization completed successfully: $($this.Name)" -Level "Info"
             return $true
         }
@@ -1972,7 +1972,7 @@ class NetworkOptimizerConfig {
     [void] AddOption([OptimizationOption]$Option) {
         $this.Options += $Option
         $this.LastModified = Get-Date
-        Write-OptimizationLog "Added optimization option: $($Option.Name)" -Level "Debug"
+    # Write-OptimizationLog "Added optimization option: $($Option.Name)" -Level "Debug"
     }
     
     # Method to get options by category
@@ -2409,7 +2409,7 @@ function Add-TCPIPOptimizations {
         "Optimize IPv4 and IPv6 stack settings for enhanced performance and routing",
         "TCP/IP Protocol Stack",
         {
-            $result = Configure-IPStack -OptimizeIPv4 -OptimizeIPv6 -OptimizeRoutingTable
+            $result = Set-IPStack -OptimizeIPv4 -OptimizeIPv6 -OptimizeRoutingTable
             Write-OptimizationLog "IP stack configuration completed with $($result.Operations.Count) operations" -Level "Info"
             return $result
         }
@@ -2604,7 +2604,7 @@ function Add-NetworkSecurityOptimizations {
     )
     
     try {
-        Write-OptimizationLog "Adding network security optimization options to configuration" -Level "Debug"
+    # Write-OptimizationLog "Adding network security optimization options to configuration" -Level "Debug"
         
         # Windows Firewall Optimization
         $firewallOptimization = [OptimizationOption]::new(
@@ -2787,7 +2787,7 @@ function Add-NetworkSecurityOptimizations {
         $comprehensiveSecurity.SafetyLevel = "Medium"
         $Config.AddOption($comprehensiveSecurity)
         
-        Write-OptimizationLog "Added $($Config.Options | Where-Object { $_.Category -eq 'Network Security' } | Measure-Object | Select-Object -ExpandProperty Count) network security optimization options" -Level "Debug"
+    # Write-OptimizationLog "Added $($Config.Options | Where-Object { $_.Category -eq 'Network Security' } | Measure-Object | Select-Object -ExpandProperty Count) network security optimization options" -Level "Debug"
     }
     catch {
         $errorMessage = "Failed to add network security optimizations: $($_.Exception.Message)"
@@ -2920,7 +2920,7 @@ function Test-ConfigurationIntegrity {
                 try {
                     # Test if we can access the registry path
                     $null = Get-Item -Path $regPath -ErrorAction Stop
-                    Write-OptimizationLog "Registry path validated: $regPath" -Level "Debug"
+                    # Write-OptimizationLog "Registry path validated: $regPath" -Level "Debug"
                 }
                 catch {
                     # Path doesn't exist, check if parent exists
@@ -3406,7 +3406,7 @@ function Set-QoSConfiguration {
     return $results
 }
 
-function Configure-IPStack {
+function Set-IPStack {
     <#
     .SYNOPSIS
         Configure IPv4 and IPv6 stack settings for optimal performance
@@ -3437,11 +3437,11 @@ function Configure-IPStack {
         [hashtable] Results of IP stack configuration operations
     
     .EXAMPLE
-        Configure-IPStack -OptimizeIPv4 -OptimizeIPv6
+    Set-IPStack -OptimizeIPv4 -OptimizeIPv6
         Applies standard IP stack optimizations for both protocols
     
     .EXAMPLE
-        Configure-IPStack -OptimizeIPv4 -DisableIPv6
+    Set-IPStack -OptimizeIPv4 -DisableIPv6
         Optimizes IPv4 and disables IPv6 (legacy configuration)
     #>
     [CmdletBinding(SupportsShouldProcess)]
@@ -3655,11 +3655,11 @@ function Test-TCPIPOptimizationRequirements {
             # Use the robust adapter detection function
             $adapterResult = Test-NetworkAdapters
             
-            Write-OptimizationLog "TCP/IP validation - adapter result Success: $($adapterResult.Success)" -Level "Debug"
-            Write-OptimizationLog "TCP/IP validation - adapter count: $($adapterResult.Adapters.Count)" -Level "Debug"
-            Write-OptimizationLog "TCP/IP validation - adapters type: $($adapterResult.Adapters.GetType().Name)" -Level "Debug"
-            Write-OptimizationLog "TCP/IP validation - adapters is null: $($null -eq $adapterResult.Adapters)" -Level "Debug"
-            Write-OptimizationLog "TCP/IP validation - full condition: Success=$($adapterResult.Success), HasAdapters=$($null -ne $adapterResult.Adapters), Count=$($adapterResult.Adapters.Count)" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - adapter result Success: $($adapterResult.Success)" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - adapter count: $($adapterResult.Adapters.Count)" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - adapters type: $($adapterResult.Adapters.GetType().Name)" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - adapters is null: $($null -eq $adapterResult.Adapters)" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - full condition: Success=$($adapterResult.Success), HasAdapters=$($null -ne $adapterResult.Adapters), Count=$($adapterResult.Adapters.Count)" -Level "Debug"
             
             # Force array conversion and explicit boolean comparison
             $hasAdapters = $false
@@ -3670,7 +3670,7 @@ function Test-TCPIPOptimizationRequirements {
                 }
             }
             
-            Write-OptimizationLog "TCP/IP validation - hasAdapters final result: $hasAdapters" -Level "Debug"
+            # Write-OptimizationLog "TCP/IP validation - hasAdapters final result: $hasAdapters" -Level "Debug"
             
             if ($hasAdapters) {
                 $adapterTest.Details += "[OK] Found $(@($adapterResult.Adapters).Count) active network adapter(s) using comprehensive detection"
@@ -3678,14 +3678,14 @@ function Test-TCPIPOptimizationRequirements {
                     $adapterTest.Details += "  - $($adapter.Name) ($($adapter.InterfaceDescription)) [Method: $($adapter.Method)]"
                 }
                 $adapterTest.Details += "Detection methods used: $($adapterResult.DetectionMethods -join '; ')"
-                Write-OptimizationLog "TCP/IP validation - adapters found successfully" -Level "Debug"
+                # Write-OptimizationLog "TCP/IP validation - adapters found successfully" -Level "Debug"
             } else {
                 # Still don't fail completely - optimizations can be applied for future use
                 $adapterTest.Success = $true
                 $adapterTest.Details += "[WARN] No active network adapters detected despite comprehensive detection"
                 $adapterTest.Details += "Detection methods attempted: $($adapterResult.DetectionMethods -join '; ')"
                 $results.Warnings += "No active network adapters detected using multiple detection methods - optimizations will apply to future connections"
-                Write-OptimizationLog "TCP/IP validation - no adapters detected. Success: $($adapterResult.Success), Count: $(@($adapterResult.Adapters).Count)" -Level "Debug"
+                # Write-OptimizationLog "TCP/IP validation - no adapters detected. Success: $($adapterResult.Success), Count: $(@($adapterResult.Adapters).Count)" -Level "Debug"
             }
         }
         catch {
@@ -4368,7 +4368,7 @@ function Get-ConnectionType {
         # Process each active adapter
         foreach ($adapter in $activeAdapters) {
             try {
-                Write-OptimizationLog "Analyzing adapter: $($adapter.Name) - $($adapter.InterfaceDescription)" -Level "Debug"
+                # Write-OptimizationLog "Analyzing adapter: $($adapter.Name) - $($adapter.InterfaceDescription)" -Level "Debug"
                 
                 # Get detailed adapter information
                 $adapterInfo = @{
@@ -4537,7 +4537,7 @@ function Optimize-WiFiSettings {
             Write-OptimizationLog "Optimizing WiFi adapter: $($adapter.Name)" -Level "Info"
             
             # Registry path for wireless settings
-            $wirelessRegPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($adapter.InterfaceGuid)"
+            # $wirelessRegPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($adapter.InterfaceGuid)"
             
             # Enable frame aggregation
             if ($EnableAggregation) {
@@ -4555,7 +4555,7 @@ function Optimize-WiFiSettings {
                             }
                         }
                         catch {
-                            Write-OptimizationLog "Failed to set aggregation for adapter: $($_.Exception.Message)" -Level "Debug"
+                            # Write-OptimizationLog "Failed to set aggregation for adapter: $($_.Exception.Message)" -Level "Debug"
                         }
                     }
                     
@@ -4593,7 +4593,7 @@ function Optimize-WiFiSettings {
                         }
                     }
                     catch {
-                        Write-OptimizationLog "Could not modify power management via PowerShell, trying registry method" -Level "Debug"
+                        # Write-OptimizationLog "Could not modify power management via PowerShell, trying registry method" -Level "Debug"
                     }
                     
                     # Registry method as fallback
@@ -4609,7 +4609,7 @@ function Optimize-WiFiSettings {
                             }
                         }
                         catch {
-                            Write-OptimizationLog "Failed to disable power saving via registry: $($_.Exception.Message)" -Level "Debug"
+                            # Write-OptimizationLog "Failed to disable power saving via registry: $($_.Exception.Message)" -Level "Debug"
                         }
                     }
                     
@@ -4634,7 +4634,7 @@ function Optimize-WiFiSettings {
                             }
                         }
                         catch {
-                            Write-OptimizationLog "Failed to optimize channel width: $($_.Exception.Message)" -Level "Debug"
+                            # Write-OptimizationLog "Failed to optimize channel width: $($_.Exception.Message)" -Level "Debug"
                         }
                     }
                     
@@ -4659,7 +4659,7 @@ function Optimize-WiFiSettings {
                             }
                         }
                         catch {
-                            Write-OptimizationLog "Failed to enable beamforming: $($_.Exception.Message)" -Level "Debug"
+                            # Write-OptimizationLog "Failed to enable beamforming: $($_.Exception.Message)" -Level "Debug"
                         }
                     }
                     
@@ -4776,7 +4776,7 @@ function Optimize-EthernetSettings {
                         Write-OptimizationLog "Interrupt moderation enabled via PowerShell for $($adapter.Name)" -Level "Info"
                     }
                     catch {
-                        Write-OptimizationLog "PowerShell method failed, trying registry approach" -Level "Debug"
+                        # Write-OptimizationLog "PowerShell method failed, trying registry approach" -Level "Debug"
                         
                         # Registry method as fallback
                         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
@@ -4791,7 +4791,7 @@ function Optimize-EthernetSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Registry method also failed: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Registry method also failed: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -4810,7 +4810,7 @@ function Optimize-EthernetSettings {
                         Write-OptimizationLog "RSS enabled via PowerShell for $($adapter.Name)" -Level "Info"
                     }
                     catch {
-                        Write-OptimizationLog "PowerShell RSS configuration failed, trying registry method" -Level "Debug"
+                        # Write-OptimizationLog "PowerShell RSS configuration failed, trying registry method" -Level "Debug"
                         
                         # Registry method for RSS
                         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
@@ -4825,7 +4825,7 @@ function Optimize-EthernetSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Failed to enable RSS via registry: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Failed to enable RSS via registry: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -4858,7 +4858,7 @@ function Optimize-EthernetSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Failed to optimize buffers via registry: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Failed to optimize buffers via registry: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -4882,7 +4882,7 @@ function Optimize-EthernetSettings {
                         }
                     }
                     catch {
-                        Write-OptimizationLog "Could not configure jumbo frames: $($_.Exception.Message)" -Level "Debug"
+                        # Write-OptimizationLog "Could not configure jumbo frames: $($_.Exception.Message)" -Level "Debug"
                     }
                     
                     return @{ Name = "JumboFrames"; Value = "Enabled"; Description = "Jumbo frames enabled if supported" }
@@ -4911,7 +4911,7 @@ function Optimize-EthernetSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Failed to optimize flow control via registry: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Failed to optimize flow control via registry: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -5032,7 +5032,7 @@ function Optimize-FiberSettings {
                         Write-OptimizationLog "Advanced buffering configured for $($adapter.Name)" -Level "Info"
                     }
                     catch {
-                        Write-OptimizationLog "PowerShell configuration failed, using registry method" -Level "Debug"
+                        # Write-OptimizationLog "PowerShell configuration failed, using registry method" -Level "Debug"
                         
                         # Registry method for advanced buffering
                         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
@@ -5048,7 +5048,7 @@ function Optimize-FiberSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Registry configuration failed: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Registry configuration failed: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -5082,7 +5082,7 @@ function Optimize-FiberSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Failed to configure interrupt coalescing: $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Failed to configure interrupt coalescing: $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -5103,7 +5103,7 @@ function Optimize-FiberSettings {
                         Write-OptimizationLog "Large Receive Offload enabled for $($adapter.Name)" -Level "Info"
                     }
                     catch {
-                        Write-OptimizationLog "Could not configure LRO via PowerShell: $($_.Exception.Message)" -Level "Debug"
+                        # Write-OptimizationLog "Could not configure LRO via PowerShell: $($_.Exception.Message)" -Level "Debug"
                     }
                     
                     return @{ Name = "LargeReceiveOffload"; Value = "Enabled"; Description = "Large Receive Offload enabled for fiber" }
@@ -5147,7 +5147,7 @@ function Optimize-FiberSettings {
                         Write-OptimizationLog "Enterprise features enabled for $($adapter.Name)" -Level "Info"
                     }
                     catch {
-                        Write-OptimizationLog "Some enterprise features could not be configured: $($_.Exception.Message)" -Level "Debug"
+                        # Write-OptimizationLog "Some enterprise features could not be configured: $($_.Exception.Message)" -Level "Debug"
                     }
                     
                     return @{ Name = "EnterpriseFeatures"; Value = "Enabled"; Description = "Enterprise-grade features enabled for fiber" }
@@ -5270,7 +5270,7 @@ function Set-AdapterPowerSettings {
                         }
                     }
                     catch {
-                        Write-OptimizationLog "PowerShell method failed, trying registry approach: $($_.Exception.Message)" -Level "Debug"
+                        # Write-OptimizationLog "PowerShell method failed, trying registry approach: $($_.Exception.Message)" -Level "Debug"
                         
                         # Registry method as fallback
                         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
@@ -5288,7 +5288,7 @@ function Set-AdapterPowerSettings {
                                 }
                             }
                             catch {
-                                Write-OptimizationLog "Registry method failed for $($adapter.Name): $($_.Exception.Message)" -Level "Debug"
+                                # Write-OptimizationLog "Registry method failed for $($adapter.Name): $($_.Exception.Message)" -Level "Debug"
                             }
                         }
                     }
@@ -5313,7 +5313,7 @@ function Set-AdapterPowerSettings {
                                 Set-NetAdapterPowerManagement -Name $adapter.Name -SelectiveSuspend Disabled -ErrorAction SilentlyContinue
                             }
                             catch {
-                                Write-OptimizationLog "Selective suspend not available for $($adapter.Name)" -Level "Debug"
+                                # Write-OptimizationLog "Selective suspend not available for $($adapter.Name)" -Level "Debug"
                             }
                             
                             Write-OptimizationLog "Performance power settings applied for $($adapter.Name)" -Level "Info"
@@ -5363,7 +5363,7 @@ function Set-AdapterPowerSettings {
                 $results.AdapterSettings += $adapterSetting
             }
             catch {
-                Write-OptimizationLog "Could not retrieve final power management status for $($adapter.Name)" -Level "Debug"
+                # Write-OptimizationLog "Could not retrieve final power management status for $($adapter.Name)" -Level "Debug"
             }
         }
         
@@ -5462,7 +5462,7 @@ function Set-NetworkSecurity {
                     
                     # Get current firewall profiles
                     $profiles = Get-NetFirewallProfile -All
-                    foreach ($profile in $profiles) {
+                    foreach ($netProfile in $profiles) {
                         $beforeState["$($profile.Name)_Enabled"] = $profile.Enabled
                         $beforeState["$($profile.Name)_DefaultInboundAction"] = $profile.DefaultInboundAction
                         $beforeState["$($profile.Name)_DefaultOutboundAction"] = $profile.DefaultOutboundAction
@@ -5487,13 +5487,13 @@ function Set-NetworkSecurity {
                             $existingRule = Get-NetFirewallRule -DisplayName $rule.DisplayName -ErrorAction SilentlyContinue
                             if (-not $existingRule) {
                                 New-NetFirewallRule @rule -Profile Any -Enabled True | Out-Null
-                                Write-OptimizationLog "Created firewall rule: $($rule.DisplayName)" -Level "Debug"
+                                # Write-OptimizationLog "Created firewall rule: $($rule.DisplayName)" -Level "Debug"
                             }
                         }
                         
                         # Get updated state
                         $updatedProfiles = Get-NetFirewallProfile -All
-                        foreach ($profile in $updatedProfiles) {
+                        foreach ($netProfile in $updatedProfiles) {
                             $afterState["$($profile.Name)_Enabled"] = $profile.Enabled
                             $afterState["$($profile.Name)_DefaultInboundAction"] = $profile.DefaultInboundAction
                             $afterState["$($profile.Name)_DefaultOutboundAction"] = $profile.DefaultOutboundAction
@@ -5542,7 +5542,7 @@ function Set-NetworkSecurity {
                         
                         foreach ($setting in $portSecuritySettings.GetEnumerator()) {
                             Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name $setting.Key -Value $setting.Value -Type DWord -Force
-                            Write-OptimizationLog "Set port security setting: $($setting.Key) = $($setting.Value)" -Level "Debug"
+                            # Write-OptimizationLog "Set port security setting: $($setting.Key) = $($setting.Value)" -Level "Debug"
                         }
                         
                         # Configure dynamic port range for security
@@ -5553,10 +5553,10 @@ function Set-NetworkSecurity {
                             }
                             
                             # Set secure dynamic port range
-                            $netshResult = netsh int ipv4 set dynamicport tcp start=49152 num=16384 2>&1
+                            netsh int ipv4 set dynamicport tcp start=49152 num=16384 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
                                 $afterState["DynamicPortRange"] = "Start: 49152, Range: 16384"
-                                Write-OptimizationLog "Dynamic port range configured for security" -Level "Debug"
+                                # Write-OptimizationLog "Dynamic port range configured for security" -Level "Debug"
                             }
                         }
                         catch {
@@ -5614,7 +5614,7 @@ function Set-NetworkSecurity {
                         
                         foreach ($setting in $connectionSecuritySettings.GetEnumerator()) {
                             Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name $setting.Key -Value $setting.Value -Type DWord -Force
-                            Write-OptimizationLog "Set connection security setting: $($setting.Key) = $($setting.Value)" -Level "Debug"
+                            # Write-OptimizationLog "Set connection security setting: $($setting.Key) = $($setting.Value)" -Level "Debug"
                         }
                         
                         # Configure network adapter security settings
@@ -5635,7 +5635,7 @@ function Set-NetworkSecurity {
                                     }
                                 }
                             }
-                            Write-OptimizationLog "Network adapter security settings configured" -Level "Debug"
+                            # Write-OptimizationLog "Network adapter security settings configured" -Level "Debug"
                         }
                         catch {
                             Write-OptimizationLog "Failed to configure adapter security settings: $($_.Exception.Message)" -Level "Warning"
@@ -5771,9 +5771,9 @@ function Invoke-NetworkMaintenance {
                         Clear-DnsClientCache -ErrorAction SilentlyContinue
                         
                         # Also use ipconfig for compatibility
-                        $ipconfigResult = & ipconfig /flushdns 2>&1
+                        & ipconfig /flushdns 2>&1 | Out-Null
                         if ($LASTEXITCODE -eq 0) {
-                            Write-OptimizationLog "DNS cache flushed successfully using ipconfig" -Level "Debug"
+                            # Write-OptimizationLog "DNS cache flushed successfully using ipconfig" -Level "Debug"
                         }
                         
                         # Restart DNS Client service for complete cache clear
@@ -5781,7 +5781,7 @@ function Invoke-NetworkMaintenance {
                             $dnsService = Get-Service -Name "Dnscache" -ErrorAction SilentlyContinue
                             if ($dnsService -and $dnsService.Status -eq "Running") {
                                 Restart-Service -Name "Dnscache" -Force -ErrorAction SilentlyContinue
-                                Write-OptimizationLog "DNS Client service restarted" -Level "Debug"
+                                # Write-OptimizationLog "DNS Client service restarted" -Level "Debug"
                             }
                         }
                         catch {
@@ -5836,16 +5836,16 @@ function Invoke-NetworkMaintenance {
                         if ($LASTEXITCODE -eq 0) {
                             $afterState["WinsockCatalog"] = "Reset to Default"
                             $afterState["RestartRequired"] = $true
-                            Write-OptimizationLog "Winsock catalog reset successfully" -Level "Debug"
+                            # Write-OptimizationLog "Winsock catalog reset successfully" -Level "Debug"
                         } else {
                             throw "Winsock reset failed: $winsockResult"
                         }
                         
                         # Also reset Winsock LSP (Layered Service Provider)
                         try {
-                            $lspResult = & netsh winsock reset catalog 2>&1
+                            & netsh winsock reset catalog 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
-                                Write-OptimizationLog "Winsock LSP catalog reset successfully" -Level "Debug"
+                                # Write-OptimizationLog "Winsock LSP catalog reset successfully" -Level "Debug"
                             }
                         }
                         catch {
@@ -5889,7 +5889,7 @@ function Invoke-NetworkMaintenance {
                         # Reset TCP/IP stack using netsh
                         $ipv4Result = & netsh int ipv4 reset 2>&1
                         if ($LASTEXITCODE -eq 0) {
-                            Write-OptimizationLog "IPv4 stack reset successfully" -Level "Debug"
+                            # Write-OptimizationLog "IPv4 stack reset successfully" -Level "Debug"
                         } else {
                             Write-OptimizationLog "IPv4 stack reset warning: $ipv4Result" -Level "Warning"
                         }
@@ -5903,7 +5903,7 @@ function Invoke-NetworkMaintenance {
                         
                         # Reset TCP global parameters
                         try {
-                            $tcpResult = & netsh int tcp reset 2>&1
+                            & netsh int tcp reset 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
                                 Write-OptimizationLog "TCP parameters reset successfully" -Level "Debug"
                             }
@@ -5914,7 +5914,7 @@ function Invoke-NetworkMaintenance {
                         
                         # Reset routing table
                         try {
-                            $routeResult = & route -f 2>&1
+                            & route -f 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
                                 Write-OptimizationLog "Routing table flushed successfully" -Level "Debug"
                             }
@@ -5978,7 +5978,7 @@ function Invoke-NetworkMaintenance {
                         
                         # Renew IP configuration
                         try {
-                            $renewResult = & ipconfig /renew 2>&1
+                            & ipconfig /renew 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
                                 Write-OptimizationLog "IP configuration renewed successfully" -Level "Debug"
                             }
@@ -6132,7 +6132,7 @@ function Disable-VulnerableProtocols {
                         
                         # Disable SMBv1 client
                         try {
-                            $smbClientResult = & sc.exe config lanmanworkstation depend= bowser/mrxsmb20/nsi 2>&1
+                            & sc.exe config lanmanworkstation depend= bowser/mrxsmb20/nsi 2>&1 | Out-Null
                             if ($LASTEXITCODE -eq 0) {
                                 Write-OptimizationLog "SMBv1 client dependency removed" -Level "Debug"
                             }
@@ -7490,7 +7490,7 @@ function Invoke-SelectedOptimizations {
     )
     
     # Initialize execution context
-    $executionContext = @{
+    $execContext = @{
         StartTime = Get-Date
         TotalOptimizations = $SelectedOptions.Count
         CompletedOptimizations = 0
@@ -7503,18 +7503,18 @@ function Invoke-SelectedOptimizations {
     }
     
     try {
-        Write-OptimizationLog "Starting optimization execution engine - ID: $($executionContext.ExecutionId)" -Level "Info"
-        Write-OptimizationLog "Total optimizations to execute: $($executionContext.TotalOptimizations)" -Level "Info"
+    Write-OptimizationLog "Starting optimization execution engine - ID: $($execContext.ExecutionId)" -Level "Info"
+    Write-OptimizationLog "Total optimizations to execute: $($execContext.TotalOptimizations)" -Level "Info"
         
-        if ($PSCmdlet.ShouldProcess("$($executionContext.TotalOptimizations) optimizations", "Execute Network Optimizations")) {
+    if ($PSCmdlet.ShouldProcess("$($execContext.TotalOptimizations) optimizations", "Execute Network Optimizations")) {
             # Continue with execution
         } else {
-            Write-Host "WHATIF: Would execute $($executionContext.TotalOptimizations) network optimizations" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would execute $($executionContext.TotalOptimizations) network optimizations" -Level "Info"
+            Write-Host "WHATIF: Would execute $($execContext.TotalOptimizations) network optimizations" -ForegroundColor Magenta
+            Write-OptimizationLog "WHATIF: Would execute $($execContext.TotalOptimizations) network optimizations" -Level "Info"
             return @{
                 Success = $true
                 Results = @()
-                ExecutionContext = $executionContext
+                ExecutionContext = $execContext
                 WhatIfMode = $true
             }
         }
@@ -7524,7 +7524,7 @@ function Invoke-SelectedOptimizations {
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                        OPTIMIZATION EXECUTION ENGINE                         ║
-║                     Executing $($executionContext.TotalOptimizations.ToString().PadLeft(2)) Network Optimizations                      ║
+║                     Executing $($execContext.TotalOptimizations.ToString().PadLeft(2)) Network Optimizations                      ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 "@ -ForegroundColor Green
         
@@ -7551,13 +7551,13 @@ function Invoke-SelectedOptimizations {
                 $progressParams = @{
                     Activity = "Executing Network Optimizations"
                     Status = "Processing: $($option.Name)"
-                    CurrentOperation = "$currentStep of $($executionContext.TotalOptimizations)"
-                    PercentComplete = [math]::Round(($currentStep / $executionContext.TotalOptimizations) * 100)
+                    CurrentOperation = "$currentStep of $($execContext.TotalOptimizations)"
+                    PercentComplete = [math]::Round(($currentStep / $execContext.TotalOptimizations) * 100)
                 }
                 Write-Progress @progressParams
                 
-                Write-Host "`n[$currentStep/$($executionContext.TotalOptimizations)] Executing: $($option.Name)" -ForegroundColor Cyan
-                Write-OptimizationLog "Starting optimization: $($option.Name) (Step $currentStep of $($executionContext.TotalOptimizations))" -Level "Info"
+                Write-Host "`n[$currentStep/$($execContext.TotalOptimizations)] Executing: $($option.Name)" -ForegroundColor Cyan
+                Write-OptimizationLog "Starting optimization: $($option.Name) (Step $currentStep of $($execContext.TotalOptimizations))" -Level "Info"
                 
                 # Pre-optimization validation for this specific option
                 if ($ValidateBeforeExecution) {
@@ -7568,7 +7568,7 @@ function Invoke-SelectedOptimizations {
                 }
                 
                 # Capture system state before optimization
-                $beforeState = Capture-SystemState -Option $option
+                $beforeState = Get-SystemState -Option $option
                 Write-OptimizationLog "System state captured before optimization: $($option.Name)" -Level "Debug"
                 
                 # Execute the optimization with comprehensive error handling
@@ -7585,16 +7585,16 @@ function Invoke-SelectedOptimizations {
                 }
                 
                 # Add result to execution context
-                $executionContext.Results += $optimizationResult
+                $execContext.Results += $optimizationResult
                 
                 # Update counters based on result
                 if ($optimizationResult.Success) {
-                    $executionContext.CompletedOptimizations++
+                    $execContext.CompletedOptimizations++
                     Write-Host "  [OK] $($option.Name) completed successfully" -ForegroundColor Green
                     Write-OptimizationLog "Optimization completed successfully: $($option.Name)" -Level "Info"
                 } else {
-                    $executionContext.FailedOptimizations++
-                    $executionContext.OverallSuccess = $false
+                    $execContext.FailedOptimizations++
+                    $execContext.OverallSuccess = $false
                     Write-Host "  [FAIL] $($option.Name) failed: $($optimizationResult.Message)" -ForegroundColor Red
                     Write-OptimizationLog "Optimization failed: $($option.Name) - $($optimizationResult.Message)" -Level "Error"
                     
@@ -7605,7 +7605,7 @@ function Invoke-SelectedOptimizations {
                             BeforeValues = $optimizationResult.BeforeValues
                             Timestamp = Get-Date
                         }
-                        $executionContext.RollbackOperations += $rollbackOp
+                        $execContext.RollbackOperations += $rollbackOp
                     }
                     
                     # Decide whether to continue or abort
@@ -7621,8 +7621,8 @@ function Invoke-SelectedOptimizations {
                             $skippedResult.Success = $false
                             $skippedResult.Message = "Skipped due to previous failure"
                             $skippedResult.Timestamp = Get-Date
-                            $executionContext.Results += $skippedResult
-                            $executionContext.SkippedOptimizations++
+                            $execContext.Results += $skippedResult
+                            $execContext.SkippedOptimizations++
                         }
                         break
                     } else {
@@ -7646,7 +7646,7 @@ function Invoke-SelectedOptimizations {
                 $errorResult.Timestamp = Get-Date
                 $errorResult.AddError($_.Exception.Message)
                 
-                $executionContext.Results += $errorResult
+                $execContext.Results += $errorResult
                 $executionContext.FailedOptimizations++
                 $executionContext.OverallSuccess = $false
                 
@@ -7663,42 +7663,42 @@ function Invoke-SelectedOptimizations {
         Write-Progress -Activity "Executing Network Optimizations" -Completed
         
         # Calculate execution summary
-        $executionContext.EndTime = Get-Date
-        $executionContext.Duration = $executionContext.EndTime - $executionContext.StartTime
+    $execContext.EndTime = Get-Date
+    $execContext.Duration = $execContext.EndTime - $execContext.StartTime
         
         # Display execution summary
-        Write-Host @"
+    Write-Host @"
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                           EXECUTION SUMMARY                                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 "@ -ForegroundColor Cyan
         
-        Write-Host "Execution ID: $($executionContext.ExecutionId)" -ForegroundColor Gray
-        Write-Host "Duration: $($executionContext.Duration.ToString('hh\:mm\:ss\.fff'))" -ForegroundColor Gray
-        Write-Host "Total Optimizations: $($executionContext.TotalOptimizations)" -ForegroundColor White
-        Write-Host "Completed Successfully: $($executionContext.CompletedOptimizations)" -ForegroundColor Green
-        Write-Host "Failed: $($executionContext.FailedOptimizations)" -ForegroundColor Red
-        Write-Host "Skipped: $($executionContext.SkippedOptimizations)" -ForegroundColor Yellow
-        Write-Host "Overall Success: $($executionContext.OverallSuccess)" -ForegroundColor $(if ($executionContext.OverallSuccess) { "Green" } else { "Red" })
-        
-        if ($executionContext.RollbackOperations.Count -gt 0) {
-            Write-Host "Rollback Operations Available: $($executionContext.RollbackOperations.Count)" -ForegroundColor Yellow
+        Write-Host "Execution ID: $($execContext.ExecutionId)" -ForegroundColor Gray
+        Write-Host "Duration: $($execContext.Duration.ToString('hh\:mm\:ss\.fff'))" -ForegroundColor Gray
+        Write-Host "Total Optimizations: $($execContext.TotalOptimizations)" -ForegroundColor White
+        Write-Host "Completed Successfully: $($execContext.CompletedOptimizations)" -ForegroundColor Green
+        Write-Host "Failed: $($execContext.FailedOptimizations)" -ForegroundColor Red
+        Write-Host "Skipped: $($execContext.SkippedOptimizations)" -ForegroundColor Yellow
+        Write-Host "Overall Success: $($execContext.OverallSuccess)" -ForegroundColor $(if ($execContext.OverallSuccess) { "Green" } else { "Red" })
+
+        if ($execContext.RollbackOperations.Count -gt 0) {
+            Write-Host "Rollback Operations Available: $($execContext.RollbackOperations.Count)" -ForegroundColor Yellow
         }
         
         # Log execution summary
-        Write-OptimizationLog "Optimization execution completed - Success: $($executionContext.OverallSuccess), Completed: $($executionContext.CompletedOptimizations), Failed: $($executionContext.FailedOptimizations), Skipped: $($executionContext.SkippedOptimizations)" -Level "Info"
+    Write-OptimizationLog "Optimization execution completed - Success: $($execContext.OverallSuccess), Completed: $($execContext.CompletedOptimizations), Failed: $($execContext.FailedOptimizations), Skipped: $($execContext.SkippedOptimizations)" -Level "Info"
         
         # Handle rollback if overall execution failed and user wants to rollback
-        if (-not $executionContext.OverallSuccess -and $executionContext.RollbackOperations.Count -gt 0) {
+    if (-not $execContext.OverallSuccess -and $execContext.RollbackOperations.Count -gt 0) {
             Write-Host "`nExecution failed with rollback operations available." -ForegroundColor Yellow
             
             if (-not $Silent) {
                 $rollbackChoice = Read-Host "Do you want to rollback the changes? (y/N)"
                 if ($rollbackChoice -match '^[Yy]') {
                     Write-Host "Initiating rollback..." -ForegroundColor Yellow
-                    $rollbackResult = Invoke-OptimizationRollback -RollbackOperations $executionContext.RollbackOperations
-                    $executionContext.RollbackResult = $rollbackResult
+                    $rollbackResult = Invoke-OptimizationRollback -RollbackOperations $execContext.RollbackOperations
+                    $execContext.RollbackResult = $rollbackResult
                     
                     if ($rollbackResult.Success) {
                         Write-Host "[OK] Rollback completed successfully" -ForegroundColor Green
@@ -7710,9 +7710,9 @@ function Invoke-SelectedOptimizations {
         }
         
         return @{
-            Success = $executionContext.OverallSuccess
-            Results = $executionContext.Results
-            ExecutionContext = $executionContext
+            Success = $execContext.OverallSuccess
+            Results = $execContext.Results
+            ExecutionContext = $execContext
             WhatIfMode = $false
         }
     }
@@ -7720,18 +7720,18 @@ function Invoke-SelectedOptimizations {
         $errorMessage = "Optimization execution engine failed: $($_.Exception.Message)"
         Write-OptimizationLog $errorMessage -Level "Error"
         Write-Error $errorMessage
-        
+
         # Ensure progress bar is completed even on error
         Write-Progress -Activity "Executing Network Optimizations" -Completed
-        
-        $executionContext.OverallSuccess = $false
-        $executionContext.EndTime = Get-Date
-        $executionContext.Duration = $executionContext.EndTime - $executionContext.StartTime
-        
+
+        $execContext.OverallSuccess = $false
+        $execContext.EndTime = Get-Date
+        $execContext.Duration = $execContext.EndTime - $execContext.StartTime
+
         return @{
             Success = $false
-            Results = $executionContext.Results
-            ExecutionContext = $executionContext
+            Results = $execContext.Results
+            ExecutionContext = $execContext
             Error = $errorMessage
             WhatIfMode = $false
         }
@@ -7827,7 +7827,7 @@ function Invoke-SingleOptimization {
             }
             
             if ($actionResult.ContainsKey('Errors')) {
-                foreach ($error in $actionResult.Errors) {
+                foreach ($errItem in $actionResult.Errors) {
                     $result.AddError($error)
                 }
             }
@@ -7843,7 +7843,7 @@ function Invoke-SingleOptimization {
             $result.Message = "Optimization completed successfully"
             
             # Try to capture after state if possible
-            $afterState = Capture-SystemState -Option $Option
+            $afterState = Get-SystemState -Option $Option
             $result.AfterValues = $afterState
         }
         
@@ -8197,7 +8197,7 @@ function Test-PostOptimizationValidation {
     }
 }
 
-function Capture-SystemState {
+function Get-SystemState {
     <#
     .SYNOPSIS
         Capture current system state for an optimization
@@ -8851,7 +8851,7 @@ function New-HTMLReport {
 
         if ($result.Errors.Count -gt 0) {
             $html += "<p><strong>Errors:</strong></p><ul>"
-            foreach ($error in $result.Errors) {
+            foreach ($errItem in $result.Errors) {
                 $html += "<li>$error</li>"
             }
             $html += "</ul>"
@@ -8965,7 +8965,7 @@ Timestamp: $($result.Timestamp.ToString('yyyy-MM-dd HH:mm:ss'))
 
         if ($result.Errors.Count -gt 0) {
             $text += "Errors:`n"
-            foreach ($error in $result.Errors) {
+            foreach ($errItem in $result.Errors) {
                 $text += "  - $error`n"
             }
             $text += "`n"
@@ -9200,7 +9200,7 @@ function Complete-OptimizationResult {
         $Result.Message = $Message
         $Result.AfterValues = $AfterValues.Clone()
         
-        foreach ($error in $Errors) {
+    foreach ($errItem in $Errors) {
             $Result.AddError($error)
         }
         
@@ -9922,27 +9922,27 @@ function Start-InteractiveMenu {
                     switch ($selection[0]) {
                         "1" { 
                             $currentMenu = "category"
-                            $currentCategory = "TCP/IP"
+                            $currentCategory = "TCP/IP Protocol Stack"
                         }
                         "2" { 
                             $currentMenu = "category"
-                            $currentCategory = "Connection"
+                            $currentCategory = "Connection Type"
                         }
                         "3" { 
                             $currentMenu = "category"
-                            $currentCategory = "DNS/Memory"
+                            $currentCategory = "DNS and Memory Management"
                         }
                         "4" { 
                             $currentMenu = "category"
-                            $currentCategory = "Security"
+                            $currentCategory = "Network Security"
                         }
                         "5" { 
                             $currentMenu = "category"
-                            $currentCategory = "Gaming"
+                            $currentCategory = "Gaming and Streaming"
                         }
                         "6" { 
                             $currentMenu = "category"
-                            $currentCategory = "Tools"
+                            $currentCategory = "Tools and Utilities"
                         }
                         "7" {
                             # Apply all recommended optimizations
