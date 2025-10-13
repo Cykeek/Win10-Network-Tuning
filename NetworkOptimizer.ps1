@@ -9346,10 +9346,9 @@ function Show-MainMenu {
 ╚══════════════════════════════════════════════════════════════════════════════╝
 "@ -ForegroundColor Cyan
         
-        # Get current network product name (robust, WhatIf-safe)
+        # Get current network product name using .NET NetworkInterface only (clean, WhatIf/admin safe)
         $networkProduct = "Unknown Adapter"
         try {
-            # Primary: .NET API (independent of WhatIf/ShouldProcess)
             $nics = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() |
                 Where-Object {
                     $_.OperationalStatus -eq [System.Net.NetworkInformation.OperationalStatus]::Up -and
@@ -9358,29 +9357,10 @@ function Show-MainMenu {
                 }
             if ($nics -and $nics.Count -gt 0) {
                 $primaryNic = $nics | Sort-Object Speed -Descending | Select-Object -First 1
-                # Prefer product Description; fall back to Name
                 $networkProduct = if ($primaryNic.Description) { $primaryNic.Description } else { $primaryNic.Name }
-            } else {
-                # Fallback: Get-NetAdapter (if available)
-                $activeAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
-                    $_.Status -eq 'Up' -and $_.Virtual -eq $false -and $_.Name -notmatch 'Loopback|Teredo|isatap|Bluetooth'
-                })
-                if ($activeAdapters.Count -gt 0) {
-                    $primary = $activeAdapters | Sort-Object LinkSpeed -Descending | Select-Object -First 1
-                    $networkProduct = $primary.InterfaceDescription
-                } else {
-                    # Fallback: CIM
-                    $cim = @(Get-CimInstance -ClassName Win32_NetworkAdapter -ErrorAction SilentlyContinue | Where-Object {
-                        $_.NetConnectionStatus -eq 2 -and $_.AdapterType -notmatch 'loopback|tunnel' -and $_.Name -notmatch 'Bluetooth|Teredo|isatap'
-                    })
-                    if ($cim.Count -gt 0) {
-                        $primary = $cim | Sort-Object Speed -Descending | Select-Object -First 1
-                        $networkProduct = $primary.Name
-                    }
-                }
             }
         } catch {
-            # Leave default "Unknown Adapter" if detection fails
+            # Leave as Unknown Adapter if detection fails
         }
 
         Write-Host "System: $env:COMPUTERNAME | User: $env:USERNAME | PowerShell: $($PSVersionTable.PSVersion) | Network: $networkProduct" -ForegroundColor Gray
