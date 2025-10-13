@@ -246,7 +246,7 @@ function Initialize-NetworkOptimizer {
         
         # Auto-enable WhatIf if not running as admin and AutoPreview is enabled
         if ($AutoPreview -and -not (Test-AdministratorPrivileges)) {
-            Write-Host "Not running as administrator - enabling preview mode automatically" -ForegroundColor Yellow
+            Write-Host "⚠️  Non-admin mode - switched to preview mode automatically" -ForegroundColor Yellow
             $WhatIfPreference = $true
             $PSBoundParameters['WhatIf'] = $true
             $Script:AutoPreviewEnabled = $true
@@ -279,37 +279,22 @@ function Initialize-NetworkOptimizer {
                 Write-Host "`n⚠️  Administrator privileges required" -ForegroundColor Yellow
                 
                 if ($isRemoteExecution) {
-                    Write-Host "`nQuick fix - Run as admin:" -ForegroundColor Cyan
-                    Write-Host "Start-Process PowerShell -Verb RunAs -ArgumentList '-Command `"iex (irm \`"https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1\`")`"'" -ForegroundColor Green
-                    Write-Host "`nOr test first (preview mode):" -ForegroundColor Cyan
-                    Write-Host "iex `"& { `$(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -WhatIf`"" -ForegroundColor Green
+                    Write-Host "💡 Run as admin: Right-click PowerShell → 'Run as Administrator' | Preview: add -WhatIf" -ForegroundColor Cyan
                 } else {
-                    Write-Host "Right-click PowerShell → 'Run as Administrator', then try again" -ForegroundColor Cyan
-                    Write-Host "Or add -WhatIf to preview changes without admin rights" -ForegroundColor Cyan
+                    Write-Host "💡 Run as admin: Right-click PowerShell → 'Run as Administrator' | Preview: add -WhatIf" -ForegroundColor Cyan
                 }
             } else {
-                # Multiple issues - show detailed error
-                Write-Host "`n" + "="*60 -ForegroundColor Red
-                Write-Host "SAFETY VALIDATION FAILED" -ForegroundColor Red
-                Write-Host "="*60 -ForegroundColor Red
-                
-                Write-Host "`nIssues found:" -ForegroundColor Red
+                # Multiple issues - show concise error
+                Write-Host "`n❌ Safety validation failed ($($safetyValidation.Errors.Count) errors, $($safetyValidation.Warnings.Count) warnings)" -ForegroundColor Red
                 foreach ($error in $safetyValidation.Errors) {
-                    Write-Host "  • $error" -ForegroundColor Red
+                    Write-Host "   • $error" -ForegroundColor Red
                 }
-                
                 if ($safetyValidation.Warnings.Count -gt 0) {
-                    Write-Host "`nWarnings:" -ForegroundColor Yellow
                     foreach ($warning in $safetyValidation.Warnings) {
-                        Write-Host "  • $warning" -ForegroundColor Yellow
+                        Write-Host "   • $warning" -ForegroundColor Yellow
                     }
                 }
-                
-                Write-Host "`nTo proceed:" -ForegroundColor Yellow
-                Write-Host "1. Run PowerShell as Administrator" -ForegroundColor White
-                Write-Host "2. Ensure you have an active network connection" -ForegroundColor White
-                Write-Host "3. For testing only, add -WhatIf parameter" -ForegroundColor White
-                Write-Host "="*60 -ForegroundColor Red
+                Write-Host "`n💡 Solutions: Run as Admin | Ensure network active | Use -WhatIf for preview" -ForegroundColor Cyan
             }
             
             throw "Network Optimizer requires administrator privileges to modify system settings."
@@ -328,10 +313,12 @@ function Initialize-NetworkOptimizer {
         } else {
             Write-OptimizationLog "System restore point creation failed or not available" -Level "Warning"
             if (-not $Silent) {
-                $continue = Read-Host "System restore point could not be created. Continue anyway? (y/N)"
+                Write-Host "`n⚠️  System restore point failed - Continue with registry backups only? (y/N)" -ForegroundColor Yellow -NoNewline
+                $continue = Read-Host " "
                 if ($continue -notmatch '^[Yy]') {
                     throw "Operation cancelled by user due to restore point failure"
                 }
+                Write-Host "✓ Proceeding with registry backups for safety" -ForegroundColor Green
             }
         }
         
@@ -568,7 +555,7 @@ function New-SystemRestorePoint {
         $restoreStatus = Get-ComputerRestorePoint -ErrorAction SilentlyContinue
         if ($null -eq $restoreStatus -and (Get-Service -Name "VSS" -ErrorAction SilentlyContinue).Status -ne "Running") {
             Write-OptimizationLog "System Restore service is not available or disabled" -Level "Warning"
-            Write-Host "Warning: System Restore is not enabled. Continuing without restore point..." -ForegroundColor Yellow
+            Write-Host "⚠️  System Restore disabled - using registry backups only" -ForegroundColor Yellow
             return $false
         }
         
@@ -7403,12 +7390,30 @@ function Start-NetworkOptimizer {
         $errorMessage = $_.Exception.Message
         Write-OptimizationLog "Network Optimizer execution failed: $errorMessage" -Level "Error"
         
-        # Display concise error
+        # Handle user cancellation gracefully
+        if ($errorMessage -match "Operation cancelled by user") {
+            Write-Host "`n✓ Operation cancelled - No changes made to your system" -ForegroundColor Yellow
+            
+            # Pause to let user see the message before closing (only in remote execution)
+            if ($MyInvocation.InvocationName -match "http") {
+                Write-Host "Press any key to close..." -ForegroundColor Gray
+                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            }
+            return
+        }
+        
+        # Display concise error for other exceptions
         if ($errorMessage -match "administrator privileges") {
             Write-Error $errorMessage
         } else {
             Write-Host "`n❌ Error: $errorMessage" -ForegroundColor Red
             Write-Host "Check log file for details: $Script:LogFile" -ForegroundColor Gray
+        }
+        
+        # For remote execution, pause before exiting
+        if ($MyInvocation.InvocationName -match "http") {
+            Write-Host "`nPress any key to close..." -ForegroundColor Gray
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         }
         
         exit 1
@@ -10001,7 +10006,7 @@ function Start-InteractiveMenu {
                         Start-Sleep -Milliseconds 500  # Brief pause to show selection feedback
                     } else {
                         # Handle action commands
-                        switch ($selection[0].ToLower()) {
+                        switch ($selection[0].ToString().ToLower()) {
                             "a" {
                                 # Apply selected optimizations
                                 $selectedOptions = $categoryOptions | Where-Object { $_.Selected }
