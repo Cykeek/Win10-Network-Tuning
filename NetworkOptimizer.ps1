@@ -9457,7 +9457,7 @@ function Show-CategoryMenu {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("TCP/IP", "Connection", "DNS/Memory", "Security", "Gaming", "Tools")]
+    [ValidateSet("TCP/IP Protocol Stack", "Connection Type Optimizations", "DNS and Memory Management", "Network Security", "Gaming and Streaming", "Tools and Utilities")]
         [string]$Category
     )
     
@@ -9918,6 +9918,11 @@ function Start-InteractiveMenu {
                     
                     $validMainOptions = @("1", "2", "3", "4", "5", "6", "7", "8", "0", "exit", "help")
                     $selection = Get-UserSelection -Prompt "Select option" -ValidOptions $validMainOptions
+                    # Guard against empty/null selection to avoid crashes
+                    if (-not $selection -or $selection.Count -eq 0 -or -not $selection[0]) {
+                        Write-Host "No input received. Returning to main menu..." -ForegroundColor Yellow
+                        continue
+                    }
                     
                     switch ($selection[0]) {
                         "1" { 
@@ -9926,7 +9931,7 @@ function Start-InteractiveMenu {
                         }
                         "2" { 
                             $currentMenu = "category"
-                            $currentCategory = "Connection Type"
+                            $currentCategory = "Connection Type Optimizations"
                         }
                         "3" { 
                             $currentMenu = "category"
@@ -10007,6 +10012,11 @@ function Start-InteractiveMenu {
                     $validCategoryOptions = $validNumbers + @("a", "s", "c", "d", "b", "0", "back", "exit", "help")
                     
                     $selection = Get-UserSelection -Prompt "Select option" -ValidOptions $validCategoryOptions -AllowMultiple
+                    # Guard against empty/null selection to avoid null method calls
+                    if (-not $selection -or $selection.Count -eq 0 -or -not $selection[0]) {
+                        Write-Host "No input received. Returning to category menu..." -ForegroundColor Yellow
+                        continue
+                    }
                     
                     if ($selection[0] -match '^\d+$') {
                         # Handle numeric selections (toggle optimization selection)
@@ -10023,7 +10033,8 @@ function Start-InteractiveMenu {
                         Start-Sleep -Milliseconds 500  # Brief pause to show selection feedback
                     } else {
                         # Handle action commands
-                        switch ($selection[0].ToString().ToLower()) {
+                        $sel0 = if ($selection[0]) { $selection[0].ToString().ToLower() } else { "" }
+                        switch ($sel0) {
                             "a" {
                                 # Apply selected optimizations
                                 $selectedOptions = $categoryOptions | Where-Object { $_.Selected }
