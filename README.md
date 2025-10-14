@@ -7,17 +7,17 @@ A modern PowerShell-based network optimization tool for Windows 10/11, designed 
 Execute the network optimizer directly from GitHub without downloading files:
 
 ```powershell
-# Basic execution
+# Basic execution (recommended method)
+$webClient = New-Object System.Net.WebClient; $webClient.Encoding = [System.Text.Encoding]::UTF8; iex $webClient.DownloadString("https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1")
+
+# Alternative shorter method (may have encoding issues on some systems)
 iex (irm "https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1")
 
 # Silent mode with recommended settings
-iex "& { $(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -Silent"
+$webClient = New-Object System.Net.WebClient; $webClient.Encoding = [System.Text.Encoding]::UTF8; $script = $webClient.DownloadString("https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1"); iex "& { $script } -Silent"
 
 # Preview mode (show changes without applying)
-iex "& { $(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -WhatIf"
-
-# Custom log location
-iex "& { $(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1') } -LogPath 'C:\Temp\network.log'"
+$webClient = New-Object System.Net.WebClient; $webClient.Encoding = [System.Text.Encoding]::UTF8; $script = $webClient.DownloadString("https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1"); iex "& { $script } -WhatIf"
 ```
 
 ## 📋 Features
@@ -43,6 +43,10 @@ iex "& { $(irm 'https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/ma
 ### Remote Execution (Recommended)
 Execute directly from GitHub without downloading files:
 ```powershell
+# Recommended method with proper encoding
+$webClient = New-Object System.Net.WebClient; $webClient.Encoding = [System.Text.Encoding]::UTF8; iex $webClient.DownloadString("https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1")
+
+# Alternative (may have encoding issues)
 iex (irm "https://raw.githubusercontent.com/Cykeek/Win10-Network-Tuning/main/NetworkOptimizer.ps1")
 ```
 
