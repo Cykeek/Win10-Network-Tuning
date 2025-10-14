@@ -8585,10 +8585,10 @@ function New-NetworkHealthReport {
     [CmdletBinding()]
     [OutputType([hashtable])]
     param(
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [hashtable]$BeforeSettings = @{},
         
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [hashtable]$AfterSettings = @{},
         
         [Parameter(Mandatory = $true)]
