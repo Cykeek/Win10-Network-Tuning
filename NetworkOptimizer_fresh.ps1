@@ -8585,10 +8585,10 @@ function New-NetworkHealthReport {
     [CmdletBinding()]
     [OutputType([hashtable])]
     param(
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [hashtable]$BeforeSettings = @{},
         
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [hashtable]$AfterSettings = @{},
         
         [Parameter(Mandatory = $true)]
@@ -10298,4 +10298,5 @@ if ($MyInvocation.InvocationName -ne '.') {
     # Only run if script is executed directly (not dot-sourced)
     Start-NetworkOptimizer
 }
+
 
