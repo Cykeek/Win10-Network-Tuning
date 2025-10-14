@@ -309,6 +309,10 @@ function Initialize-NetworkOptimizer {
         Write-Host "Creating system restore point..." -ForegroundColor Yellow
         $restorePointResult = New-SystemRestorePoint -Description "Network Optimizer - Before Optimization"
         
+        # Track restore point status for later use
+        $Script:RestorePointCreated = $restorePointResult.Success
+        $Script:RestorePointMessage = $restorePointResult.Message
+        
         if ($restorePointResult.Success) {
             Write-OptimizationLog "System restore point created successfully: $($restorePointResult.Message)" -Level "Info"
             Write-Host "✓ $($restorePointResult.Message)" -ForegroundColor Green
@@ -3028,14 +3032,35 @@ function Add-ToolsUtilitiesOptimizations {
         [NetworkOptimizerConfig]$Config
     )
     
-    # Create System Restore Point
+    # Create System Restore Point (conditional)
     $createRestorePoint = [OptimizationOption]::new(
         "Create System Restore Point",
-        "Create a system restore point before applying optimizations",
+        "Create a system restore point before applying optimizations (only if initial attempt failed)",
         "Tools and Utilities",
         {
-            # This will be implemented in the backup and safety module
-            Write-OptimizationLog "System restore point creation placeholder" -Level "Info"
+            # Check if we already created a restore point during initialization
+            if ($Script:RestorePointCreated) {
+                Write-OptimizationLog "System restore point already created during initialization - skipping duplicate creation" -Level "Info"
+                Write-Host "✓ System restore point already available from initialization" -ForegroundColor Green
+                return
+            }
+            
+            Write-OptimizationLog "Initial restore point creation failed - attempting retry..." -Level "Info"
+            Write-Host "Retrying system restore point creation..." -ForegroundColor Yellow
+            
+            # Retry restore point creation since the initial attempt failed
+            $retryResult = New-SystemRestorePoint -Description "Network Optimizer - Retry After Optimizations"
+            
+            if ($retryResult.Success) {
+                Write-OptimizationLog "Retry restore point creation successful: $($retryResult.Message)" -Level "Info"
+                Write-Host "✓ $($retryResult.Message)" -ForegroundColor Green
+                $Script:RestorePointCreated = $true
+                $Script:RestorePointMessage = $retryResult.Message
+            } else {
+                Write-OptimizationLog "Retry restore point creation also failed: $($retryResult.Message)" -Level "Warning"
+                Write-Host "⚠️  Retry failed: $($retryResult.Message)" -ForegroundColor Yellow
+                Write-Host "✓ Continuing with registry backups for safety" -ForegroundColor Green
+            }
         }
     )
     $createRestorePoint.Requirements = @("Administrator")
