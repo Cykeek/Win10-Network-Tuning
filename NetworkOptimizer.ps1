@@ -316,9 +316,14 @@ function Initialize-NetworkOptimizer {
                 Write-Host "`n⚠️  System restore point failed - Continue with registry backups only? (y/N)" -ForegroundColor Yellow -NoNewline
                 $continue = Read-Host " "
                 if ($continue -notmatch '^[Yy]') {
+                    Write-OptimizationLog "User declined to continue without restore point" -Level "Warning"
                     throw "Operation cancelled by user due to restore point failure"
                 }
                 Write-Host "✓ Proceeding with registry backups for safety" -ForegroundColor Green
+            } else {
+                # In Silent mode, automatically continue with registry backups
+                Write-OptimizationLog "Silent mode: Automatically continuing with registry backups only" -Level "Info"
+                Write-Host "✓ Proceeding with registry backups for safety (Silent mode)" -ForegroundColor Green
             }
         }
         
