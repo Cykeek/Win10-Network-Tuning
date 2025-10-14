@@ -61,21 +61,9 @@ param(
     [switch]$Silent,
     
     [Parameter(HelpMessage = "Path to custom configuration file")]
-    [ValidateScript({
-        if ($_ -and -not (Test-Path $_ -PathType Leaf)) {
-            throw "Configuration file not found: $_"
-        }
-        return $true
-    })]
     [string]$ConfigFile,
     
     [Parameter(HelpMessage = "Custom path for log file output")]
-    [ValidateScript({
-        if ($_ -and -not (Test-Path (Split-Path $_ -Parent) -PathType Container)) {
-            throw "Log directory not found: $(Split-Path $_ -Parent)"
-        }
-        return $true
-    })]
     [string]$LogPath,
     
     [Parameter(HelpMessage = "Automatically enable preview mode when not running as administrator")]
@@ -85,6 +73,15 @@ param(
 #Requires -Version 5.1
 # Administrator requirement: Checked dynamically to support AutoPreview and remote execution
 # For full functionality, run as Administrator
+
+# Parameter validation (moved here to avoid remote execution parsing issues)
+if ($ConfigFile -and $ConfigFile -ne "" -and -not (Test-Path $ConfigFile -PathType Leaf)) {
+    Write-Error "Configuration file not found: $ConfigFile" -ErrorAction Stop
+}
+
+if ($LogPath -and $LogPath -ne "" -and -not (Test-Path (Split-Path $LogPath -Parent) -PathType Container)) {
+    Write-Error "Log directory not found: $(Split-Path $LogPath -Parent)" -ErrorAction Stop
+}
 
 # Script metadata
 $Script:Version = "1.0.0"
@@ -965,12 +962,6 @@ function Restore-NetworkSettings {
     [OutputType([bool])]
     param(
         [Parameter(ParameterSetName = "File")]
-        [ValidateScript({
-            if (-not (Test-Path $_)) {
-                throw "Backup file not found: $_"
-            }
-            return $true
-        })]
         [string]$BackupFile,
         
         [Parameter(ParameterSetName = "Info")]
@@ -979,6 +970,11 @@ function Restore-NetworkSettings {
     
     try {
         Write-OptimizationLog "Starting network settings restoration" -Level "Info"
+        
+        # Parameter validation
+        if ($PSCmdlet.ParameterSetName -eq "File" -and $BackupFile -and -not (Test-Path $BackupFile)) {
+            throw "Backup file not found: $BackupFile"
+        }
         
         if ($PSCmdlet.ShouldProcess("Network Settings", "Restore from Backup")) {
             # Continue with restoration
