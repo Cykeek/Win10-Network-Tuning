@@ -1924,6 +1924,17 @@ class OptimizationResult {
         $this.Errors = @()
     }
     
+    # Full constructor
+    OptimizationResult([string]$OptimizationName, [bool]$Success, [string]$Message, [hashtable]$BeforeValues, [hashtable]$AfterValues, [datetime]$Timestamp, [string[]]$Errors) {
+        $this.OptimizationName = $OptimizationName
+        $this.Success = $Success
+        $this.Message = $Message
+        $this.BeforeValues = $BeforeValues
+        $this.AfterValues = $AfterValues
+        $this.Timestamp = $Timestamp
+        $this.Errors = $Errors
+    }
+    
     # Method to add an error
     [void] AddError([string]$ErrorMessage) {
         $this.Errors += $ErrorMessage
@@ -8574,11 +8585,11 @@ function New-NetworkHealthReport {
     [CmdletBinding()]
     [OutputType([hashtable])]
     param(
-        [Parameter(Mandatory = $true)]
-        [hashtable]$BeforeSettings,
+        [Parameter(Mandatory = $false)]
+        [hashtable]$BeforeSettings = @{},
         
-        [Parameter(Mandatory = $true)]
-        [hashtable]$AfterSettings,
+        [Parameter(Mandatory = $false)]
+        [hashtable]$AfterSettings = @{},
         
         [Parameter(Mandatory = $true)]
         [OptimizationResult[]]$OptimizationResults,
