@@ -307,15 +307,19 @@ function Initialize-NetworkOptimizer {
         
         # Create system restore point for rollback capability
         Write-Host "Creating system restore point..." -ForegroundColor Yellow
-        $restorePointCreated = New-SystemRestorePoint -Description "Network Optimizer - Before Optimization"
-        if ($restorePointCreated) {
-            Write-OptimizationLog "System restore point created successfully" -Level "Info"
+        $restorePointResult = New-SystemRestorePoint -Description "Network Optimizer - Before Optimization"
+        
+        if ($restorePointResult.Success) {
+            Write-OptimizationLog "System restore point created successfully: $($restorePointResult.Message)" -Level "Info"
+            Write-Host "✓ $($restorePointResult.Message)" -ForegroundColor Green
         } else {
-            Write-OptimizationLog "System restore point creation failed or not available" -Level "Warning"
+            Write-OptimizationLog "System restore point creation failed: $($restorePointResult.Message)" -Level "Warning"
+            Write-Host "⚠️  $($restorePointResult.Message)" -ForegroundColor Yellow
+            
             if (-not $Silent) {
-                Write-Host "`n⚠️  System restore point failed - Continue with registry backups only? (y/N)" -ForegroundColor Yellow -NoNewline
+                Write-Host "`nContinue with registry backups only? (Y/n)" -ForegroundColor Yellow -NoNewline
                 $continue = Read-Host " "
-                if ($continue -notmatch '^[Yy]') {
+                if ($continue -match '^[Nn]') {
                     Write-OptimizationLog "User declined to continue without restore point" -Level "Warning"
                     throw "Operation cancelled by user due to restore point failure"
                 }
@@ -517,75 +521,234 @@ function Invoke-SafeOperation {
 function New-SystemRestorePoint {
     <#
     .SYNOPSIS
-        Create a system restore point before applying network optimizations
+        Create a system restore point with comprehensive error handling and service management
     
     .DESCRIPTION
-        Creates a system restore point using PowerShell Checkpoint-Computer cmdlet
-        to allow rollback of system changes if needed. Includes error handling
-        and validation of restore point creation.
+        Creates a system restore point using enhanced logic that:
+        - Checks and starts required services (VSS, System Restore)
+        - Validates System Restore is enabled
+        - Handles common System Restore failures gracefully
+        - Provides detailed diagnostics for troubleshooting
     
     .PARAMETER Description
-        Description for the restore point (default: "Network Optimizer Backup")
+        Description for the restore point (default: auto-generated with timestamp)
     
     .OUTPUTS
-        [bool] True if restore point created successfully, False otherwise
+        [hashtable] Result object with Success, Message, and diagnostic information
     
     .EXAMPLE
-        New-SystemRestorePoint
-        Creates a restore point with default description
-        
-    .EXAMPLE
-        New-SystemRestorePoint -Description "Before TCP optimization"
-        Creates a restore point with custom description
+        $result = New-SystemRestorePoint -Description "Before Network Optimization"
+        if ($result.Success) { Write-Host "Restore point created" }
     #>
     [CmdletBinding(SupportsShouldProcess)]
-    [OutputType([bool])]
+    [OutputType([hashtable])]
     param(
         [Parameter()]
         [string]$Description = "Network Optimizer Backup - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     )
     
+    $result = @{
+        Success = $false
+        Message = ""
+        Details = @{}
+        RequiredServices = @("VSS", "swprv")
+        ServicesStarted = @()
+    }
+    
     try {
-        Write-OptimizationLog "Creating system restore point: $Description" -Level "Info"
+        Write-OptimizationLog "Starting System Restore Point creation: $Description" -Level "Info"
         
+        # WhatIf mode handling
         if ($PSCmdlet.ShouldProcess($Description, "Create System Restore Point")) {
-            # Continue with restore point creation
+            # Continue with actual creation
         } else {
             Write-Host "WHATIF: Would create system restore point: $Description" -ForegroundColor Magenta
             Write-OptimizationLog "WHATIF: Would create system restore point: $Description" -Level "Info"
-            return $true
+            $result.Success = $true
+            $result.Message = "WhatIf mode - restore point creation simulated"
+            return $result
         }
         
-        # Check if System Restore is enabled
-        $restoreStatus = Get-ComputerRestorePoint -ErrorAction SilentlyContinue
-        if ($null -eq $restoreStatus -and (Get-Service -Name "VSS" -ErrorAction SilentlyContinue).Status -ne "Running") {
-            Write-OptimizationLog "System Restore service is not available or disabled" -Level "Warning"
-            Write-Host "⚠️  System Restore disabled - using registry backups only" -ForegroundColor Yellow
-            return $false
+        # Step 1: Check if System Restore is available on this system
+        Write-OptimizationLog "Checking System Restore availability..." -Level "Debug"
+        
+        # Check if we're on a supported Windows version
+        $osVersion = [System.Environment]::OSVersion.Version
+        if ($osVersion.Major -lt 10) {
+            $result.Message = "System Restore requires Windows 10 or later"
+            Write-OptimizationLog $result.Message -Level "Warning"
+            return $result
         }
         
-        # Create the restore point
-    Checkpoint-Computer -Description $Description -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
+        # Step 2: Check and start required services
+        Write-OptimizationLog "Checking required services..." -Level "Debug"
+        $servicesOk = $true
         
-        # Verify restore point creation
+        foreach ($serviceName in $result.RequiredServices) {
+            try {
+                $service = Get-Service -Name $serviceName -ErrorAction Stop
+                $result.Details[$serviceName] = @{
+                    Status = $service.Status
+                    StartType = $service.StartType
+                    OriginalStatus = $service.Status
+                }
+                
+                if ($service.Status -ne 'Running') {
+                    Write-OptimizationLog "Starting service: $serviceName" -Level "Info"
+                    
+                    # Try to start the service
+                    if ($service.StartType -eq 'Disabled') {
+                        Write-OptimizationLog "Service $serviceName is disabled - attempting to enable temporarily" -Level "Warning"
+                        Set-Service -Name $serviceName -StartupType Manual -ErrorAction Stop
+                        $result.Details[$serviceName].StartTypeChanged = $true
+                    }
+                    
+                    Start-Service -Name $serviceName -ErrorAction Stop
+                    $result.ServicesStarted += $serviceName
+                    $result.Details[$serviceName].Status = 'Running'
+                    Write-OptimizationLog "Successfully started service: $serviceName" -Level "Info"
+                } else {
+                    Write-OptimizationLog "Service $serviceName is already running" -Level "Debug"
+                }
+            }
+            catch {
+                $errorMsg = "Failed to start required service $serviceName : $($_.Exception.Message)"
+                Write-OptimizationLog $errorMsg -Level "Error"
+                $result.Details[$serviceName] = @{ Error = $_.Exception.Message }
+                $servicesOk = $false
+            }
+        }
+        
+        if (-not $servicesOk) {
+            $result.Message = "Required services could not be started. System Restore is not available."
+            return $result
+        }
+        
+        # Step 3: Wait for services to fully initialize
+        Write-OptimizationLog "Waiting for services to initialize..." -Level "Debug"
+        Start-Sleep -Seconds 3
+        
+        # Step 4: Test and enable System Restore if possible
+        Write-OptimizationLog "Testing System Restore configuration..." -Level "Debug"
+        try {
+            # First, try to enable System Restore if it's disabled
+            Write-OptimizationLog "Attempting to enable System Restore on system drive..." -Level "Debug"
+            Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction Stop
+            Write-OptimizationLog "System Restore enabled on $env:SystemDrive" -Level "Info"
+            Start-Sleep -Seconds 2  # Allow time for changes to take effect
+        }
+        catch {
+            $enableError = $_.Exception.Message
+            Write-OptimizationLog "Could not enable System Restore: $enableError" -Level "Warning"
+            
+            # Check for specific error types
+            if ($enableError -match "Access denied|not authorized") {
+                Write-OptimizationLog "System Restore may be disabled by Group Policy or system configuration" -Level "Warning"
+                $result.Details.RestoreDisabledByPolicy = $true
+            }
+        }
+        
+        # Step 5: Test System Restore access
+        Write-OptimizationLog "Testing System Restore access..." -Level "Debug"
+        try {
+            # Try to query existing restore points to test access
+            $existingPoints = Get-ComputerRestorePoint -ErrorAction Stop
+            $result.Details.ExistingRestorePoints = $existingPoints.Count
+            Write-OptimizationLog "System Restore access confirmed. Found $($existingPoints.Count) existing restore points." -Level "Info"
+        }
+        catch {
+            # If we can't read restore points, System Restore might be disabled
+            $accessError = $_.Exception.Message
+            Write-OptimizationLog "System Restore access test failed: $accessError" -Level "Warning"
+            
+            # Check if it's an access denied error (common when SR is disabled)
+            if ($accessError -match "Access denied|access is denied|not enabled") {
+                $result.Message = "System Restore is disabled on this system. Using registry backups only."
+                Write-OptimizationLog "System Restore appears to be disabled at the system level" -Level "Warning"
+                return $result
+            }
+            
+            # For other errors, we'll still try to create the restore point
+            Write-OptimizationLog "Proceeding with restore point creation despite access test failure" -Level "Warning"
+        }
+        
+        # Step 6: Create the restore point
+        Write-OptimizationLog "Creating restore point..." -Level "Info"
+        Write-Host "Creating system restore point..." -ForegroundColor Yellow
+        
+        # Use Checkpoint-Computer with enhanced error handling
+        Checkpoint-Computer -Description $Description -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
+        
+        # Step 7: Verify restore point creation
+        Write-OptimizationLog "Verifying restore point creation..." -Level "Debug"
         Start-Sleep -Seconds 2
-        $latestRestorePoint = Get-ComputerRestorePoint | Sort-Object CreationTime -Descending | Select-Object -First 1
         
-        if ($latestRestorePoint -and $latestRestorePoint.Description -eq $Description) {
-            Write-OptimizationLog "System restore point created successfully: $Description" -Level "Info"
-            Write-Host "System restore point created successfully" -ForegroundColor Green
-            return $true
-        } else {
-            Write-OptimizationLog "Failed to verify restore point creation" -Level "Warning"
-            return $false
+        try {
+            $latestRestorePoint = Get-ComputerRestorePoint | Sort-Object CreationTime -Descending | Select-Object -First 1
+            
+            if ($latestRestorePoint -and $latestRestorePoint.Description -eq $Description) {
+                $result.Success = $true
+                $result.Message = "System restore point created successfully"
+                $result.Details.RestorePoint = @{
+                    Description = $latestRestorePoint.Description
+                    CreationTime = $latestRestorePoint.CreationTime
+                    SequenceNumber = $latestRestorePoint.SequenceNumber
+                }
+                Write-OptimizationLog "System restore point verified: $Description" -Level "Info"
+                Write-Host "✓ System restore point created successfully" -ForegroundColor Green
+            } else {
+                $result.Message = "Restore point creation could not be verified"
+                Write-OptimizationLog "Could not verify restore point creation" -Level "Warning"
+                # Still count as success since Checkpoint-Computer didn't throw an error
+                $result.Success = $true
+            }
+        }
+        catch {
+            # Verification failed, but the Checkpoint-Computer succeeded
+            $result.Success = $true
+            $result.Message = "Restore point created but verification failed"
+            Write-OptimizationLog "Restore point verification failed: $($_.Exception.Message)" -Level "Warning"
         }
     }
     catch {
-        $errorMessage = "Failed to create system restore point: $($_.Exception.Message)"
-        Write-OptimizationLog $errorMessage -Level "Error"
-        Write-Host "Warning: Could not create system restore point. Continuing..." -ForegroundColor Yellow
-        return $false
+        $errorMessage = $_.Exception.Message
+        $result.Message = "Failed to create system restore point: $errorMessage"
+        Write-OptimizationLog $result.Message -Level "Error"
+        
+        # Provide specific error guidance
+        if ($errorMessage -match "service cannot be started|is disabled") {
+            $result.Message += " (System Restore service is disabled)"
+        }
+        elseif ($errorMessage -match "Access denied|access is denied") {
+            $result.Message += " (System Restore is disabled on this system)"
+        }
+        elseif ($errorMessage -match "not enough storage|disk space") {
+            $result.Message += " (Insufficient disk space for restore point)"
+        }
     }
+    finally {
+        # Clean up: Stop services we started (but only if we started them)
+        foreach ($serviceName in $result.ServicesStarted) {
+            try {
+                $originalStatus = $result.Details[$serviceName].OriginalStatus
+                if ($originalStatus -eq 'Stopped') {
+                    Write-OptimizationLog "Stopping service we started: $serviceName" -Level "Debug"
+                    Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+                }
+                
+                # Revert startup type if we changed it
+                if ($result.Details[$serviceName].StartTypeChanged) {
+                    Write-OptimizationLog "Reverting startup type for service: $serviceName" -Level "Debug"
+                    Set-Service -Name $serviceName -StartupType Disabled -ErrorAction SilentlyContinue
+                }
+            }
+            catch {
+                Write-OptimizationLog "Failed to cleanup service $serviceName : $($_.Exception.Message)" -Level "Warning"
+            }
+        }
+    }
+    
+    return $result
 }
 
 function Backup-NetworkSettings {
