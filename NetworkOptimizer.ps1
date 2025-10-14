@@ -349,14 +349,14 @@ function Initialize-NetworkOptimizer {
         
         # Display safety summary
         Write-Host "`nSafety mechanisms initialized:" -ForegroundColor Green
-        Write-Host "  [OK] Safety validation passed" -ForegroundColor Green
-        Write-Host "  [OK] Backup directory: $Script:BackupPath" -ForegroundColor Green
+        Write-Host "  ✅ Safety validation passed" -ForegroundColor Green
+        Write-Host "  ✅ Backup directory: $Script:BackupPath" -ForegroundColor Green
         if ($restorePointCreated) {
-            Write-Host "  [OK] System restore point created" -ForegroundColor Green
+            Write-Host "  ✅ System restore point created" -ForegroundColor Green
         } else {
-            Write-Host "  [WARN] System restore point not available" -ForegroundColor Yellow
+            Write-Host "  ⚠️  System restore point not available" -ForegroundColor Yellow
         }
-        Write-Host "  [OK] Network settings backed up" -ForegroundColor Green
+        Write-Host "  ✅ Network settings backed up" -ForegroundColor Green
         
         Write-Host "`nInitialization complete!" -ForegroundColor Green
         Write-OptimizationLog "Network Optimizer initialization completed successfully with full safety mechanisms" -Level "Info"
@@ -719,15 +719,29 @@ function New-SystemRestorePoint {
         $result.Message = "Failed to create system restore point: $errorMessage"
         Write-OptimizationLog $result.Message -Level "Error"
         
-        # Provide specific error guidance
+        # Provide specific error guidance with simplified user messaging
         if ($errorMessage -match "service cannot be started|is disabled") {
             $result.Message += " (System Restore service is disabled)"
+            Write-Host "⚠️  System Restore service is disabled - using registry backups only" -ForegroundColor Yellow
         }
         elseif ($errorMessage -match "Access denied|access is denied") {
             $result.Message += " (System Restore is disabled on this system)"
+            Write-Host "⚠️  System Restore is disabled - using registry backups only" -ForegroundColor Yellow
         }
         elseif ($errorMessage -match "not enough storage|disk space") {
             $result.Message += " (Insufficient disk space for restore point)"
+            Write-Host "⚠️  Insufficient disk space for restore point - using registry backups only" -ForegroundColor Yellow
+        }
+        elseif ($errorMessage -match "already been created within the past.*minutes") {
+            # Simplify the frequency limit message
+            $result.Message = "System restore point was recently created - using existing point"
+            Write-OptimizationLog "Restore point frequency limit reached - this is normal behavior" -Level "Info"
+            Write-Host "ℹ️  Recent restore point available - using existing point" -ForegroundColor Cyan
+            # This is actually a success case - we have a restore point
+            $result.Success = $true
+        }
+        else {
+            Write-Host "⚠️  Could not create restore point - using registry backups only" -ForegroundColor Yellow
         }
     }
     finally {
@@ -1954,10 +1968,10 @@ function Confirm-OptimizationSafety {
         }
         
         Write-Host "`nSafety Mechanisms in Place:" -ForegroundColor Green
-        Write-Host "  [OK] System restore point created" -ForegroundColor Green
-        Write-Host "  [OK] Registry settings backed up to: $Script:BackupPath" -ForegroundColor Green
-        Write-Host "  [OK] Detailed logging enabled: $Script:LogFile" -ForegroundColor Green
-        Write-Host "  [OK] Emergency rollback available" -ForegroundColor Green
+        Write-Host "  ✅ System restore point created" -ForegroundColor Green
+        Write-Host "  ✅ Registry settings backed up to: $Script:BackupPath" -ForegroundColor Green
+        Write-Host "  ✅ Detailed logging enabled: $Script:LogFile" -ForegroundColor Green
+        Write-Host "  ✅ Emergency rollback available" -ForegroundColor Green
         
         Write-Host "`nRollback Options Available:" -ForegroundColor Cyan
         Write-Host "  1. Registry restore from backup files" -ForegroundColor White
@@ -7741,7 +7755,7 @@ function Invoke-SelectedOptimizations {
                 throw "Pre-execution validation failed: $($preValidation.Message)"
             }
             
-            Write-Host "[OK] Pre-execution validation passed" -ForegroundColor Green
+            Write-Host "✅ Pre-execution validation passed" -ForegroundColor Green
             Write-OptimizationLog "Pre-execution validation completed successfully" -Level "Info"
         }
         
@@ -7760,7 +7774,7 @@ function Invoke-SelectedOptimizations {
                 }
                 Write-Progress @progressParams
                 
-                Write-Host "`n[$currentStep/$($execContext.TotalOptimizations)] Executing: $($option.Name)" -ForegroundColor Cyan
+                Write-Host "`n[$currentStep/$($execContext.TotalOptimizations)] $($option.Name)" -ForegroundColor Cyan
                 Write-OptimizationLog "Starting optimization: $($option.Name) (Step $currentStep of $($execContext.TotalOptimizations))" -Level "Info"
                 
                 # Pre-optimization validation for this specific option
@@ -7794,12 +7808,18 @@ function Invoke-SelectedOptimizations {
                 # Update counters based on result
                 if ($optimizationResult.Success) {
                     $execContext.CompletedOptimizations++
-                    Write-Host "  [OK] $($option.Name) completed successfully" -ForegroundColor Green
+                    Write-Host "  ✅ $($option.Name)" -ForegroundColor Green
                     Write-OptimizationLog "Optimization completed successfully: $($option.Name)" -Level "Info"
                 } else {
                     $execContext.FailedOptimizations++
                     $execContext.OverallSuccess = $false
-                    Write-Host "  [FAIL] $($option.Name) failed: $($optimizationResult.Message)" -ForegroundColor Red
+                    # Display simplified error message for user, detailed error in logs
+                    $userMessage = if ($optimizationResult.Message.Length -gt 80) { 
+                        $optimizationResult.Message.Substring(0, 77) + "..." 
+                    } else { 
+                        $optimizationResult.Message 
+                    }
+                    Write-Host "  ❌ $($option.Name) - $userMessage" -ForegroundColor Red
                     Write-OptimizationLog "Optimization failed: $($option.Name) - $($optimizationResult.Message)" -Level "Error"
                     
                     # Add rollback operation if available
@@ -7851,10 +7871,16 @@ function Invoke-SelectedOptimizations {
                 $errorResult.AddError($_.Exception.Message)
                 
                 $execContext.Results += $errorResult
-                $executionContext.FailedOptimizations++
-                $executionContext.OverallSuccess = $false
+                $execContext.FailedOptimizations++
+                $execContext.OverallSuccess = $false
                 
-                Write-Host "  [FAIL] Critical error in $($option.Name): $($_.Exception.Message)" -ForegroundColor Red
+                # Display simplified error message for user, detailed error in logs
+                $userErrorMessage = if ($_.Exception.Message.Length -gt 60) { 
+                    $_.Exception.Message.Substring(0, 57) + "..." 
+                } else { 
+                    $_.Exception.Message 
+                }
+                Write-Host "  ❌ $($option.Name) - $userErrorMessage" -ForegroundColor Red
                 
                 if (-not $ContinueOnError) {
                     Write-Host "  Aborting execution due to critical error" -ForegroundColor Red
