@@ -11,7 +11,10 @@ param(
     [string]$LogPath,
 
     [Parameter(HelpMessage = "Automatically enable preview mode when not running as administrator")]
-    [switch]$AutoPreview
+        [switch]$AutoPreview,
+
+    [Parameter(HelpMessage = "Bypass safety checks including pending reboot detection")]
+    [switch]$Force
 )
 
 #Requires -Version 5.1
@@ -563,13 +566,58 @@ function New-SystemRestorePoint {
             }
         }
 
-        # Step 5: Test System Restore access
+        # Step 5: Test System Restore access and check for recent restore points
         Write-OptimizationLog "Testing System Restore access..." -Level "Debug"
         try {
             # Try to query existing restore points to test access
             $existingPoints = Get-ComputerRestorePoint -ErrorAction Stop
             $result.Details.ExistingRestorePoints = $existingPoints.Count
             Write-OptimizationLog "System Restore access confirmed. Found $($existingPoints.Count) existing restore points." -Level "Info"
+
+            # Check if a restore point was created recently (within frequency limit)
+            if ($existingPoints.Count -gt 0) {
+                $latestRestorePoint = $existingPoints | Sort-Object CreationTime -Descending | Select-Object -First 1
+
+                # Convert WMI datetime to DateTime object if needed
+                $restorePointTime = $latestRestorePoint.CreationTime
+                if ($restorePointTime -is [string]) {
+                    try {
+                        $restorePointTime = [Management.ManagementDateTimeConverter]::ToDateTime($restorePointTime)
+                    }
+                    catch {
+                        # If conversion fails, try parsing as regular datetime
+                        $restorePointTime = [DateTime]::Parse($restorePointTime)
+                    }
+                }
+
+                $timeSinceLastRestore = (Get-Date) - $restorePointTime
+
+                # Get the frequency limit from registry (default is 1440 minutes = 24 hours)
+                try {
+                    $frequencyReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" -Name "SystemRestorePointCreationFrequency" -ErrorAction SilentlyContinue
+                    $frequencyMinutes = if ($frequencyReg) { $frequencyReg.SystemRestorePointCreationFrequency } else { 1440 }
+                }
+                catch {
+                    $frequencyMinutes = 1440  # Default to 24 hours
+                }
+
+                Write-OptimizationLog "Restore point frequency limit: $frequencyMinutes minutes" -Level "Debug"
+                Write-OptimizationLog "Time since last restore point: $($timeSinceLastRestore.TotalMinutes) minutes" -Level "Debug"
+
+                # If within the frequency limit, use the existing restore point
+                if ($timeSinceLastRestore.TotalMinutes -lt $frequencyMinutes) {
+                    $result.Success = $true
+                    $result.Message = "Recent restore point available (created $([math]::Round($timeSinceLastRestore.TotalMinutes)) minutes ago) - using existing point"
+                    $result.Details.RestorePoint = @{
+                        Description = $latestRestorePoint.Description
+                        CreationTime = $restorePointTime
+                        SequenceNumber = $latestRestorePoint.SequenceNumber
+                    }
+                    Write-OptimizationLog "Using existing restore point within frequency limit: $($latestRestorePoint.Description)" -Level "Info"
+                    Show-CleanMessage "Restore point created" -Type Success
+                    return $result
+                }
+            }
         }
         catch {
             # If we can't read restore points, System Restore might be disabled
@@ -7050,10 +7098,12 @@ function Test-PreExecutionValidation {
             $validationResults += "Insufficient available memory for safe operation"
         }
 
-        # Check for pending reboot
-        $pendingReboot = Test-PendingReboot
-        if ($pendingReboot) {
-            $validationResults += "System has pending reboot - some optimizations may not apply correctly"
+        # Check for pending reboot (unless Force is specified)
+        if (-not $Force) {
+            $pendingReboot = Test-PendingReboot
+            if ($pendingReboot) {
+                $validationResults += "System has pending reboot - some optimizations may not apply correctly"
+            }
         }
 
         $success = $validationResults.Count -eq 0
@@ -7209,16 +7259,16 @@ function Test-PostOptimizationValidation {
             $retryCount = 3
 
             for ($i = 0; $i -lt $retryCount; $i++) {
-                foreach ($host in $testHosts) {
+                foreach ($testHost in $testHosts) {
                     try {
-                        $networkTest = Test-Connection -ComputerName $host -Count 1 -Quiet -TimeoutSeconds 2 -ErrorAction SilentlyContinue
+                        $networkTest = Test-Connection -ComputerName $testHost -Count 1 -Quiet -TimeoutSeconds 2 -ErrorAction SilentlyContinue
                         if ($networkTest) {
-                            Write-OptimizationLog "Network connectivity verified via $host" -Level "Debug"
+                            Write-OptimizationLog "Network connectivity verified via $testHost" -Level "Debug"
                             break
                         }
                     }
                     catch {
-                        Write-OptimizationLog "Connectivity test to $host failed: $($_.Exception.Message)" -Level "Debug"
+                        Write-OptimizationLog "Connectivity test to $testHost failed: $($_.Exception.Message)" -Level "Debug"
                     }
                 }
                 if ($networkTest) { break }
