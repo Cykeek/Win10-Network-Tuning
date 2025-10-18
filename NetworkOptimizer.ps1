@@ -7504,8 +7504,8 @@ function New-NetworkHealthReport {
         [Parameter(Mandatory = $false)]
         [hashtable]$AfterSettings = @{},
 
-        [Parameter(Mandatory = $true)]
-        [OptimizationResult[]]$OptimizationResults,
+        [Parameter(Mandatory = $false)]
+        [OptimizationResult[]]$OptimizationResults = @(),
 
         [Parameter()]
         [string]$OutputPath = $Script:BackupPath,
@@ -7520,6 +7520,26 @@ function New-NetworkHealthReport {
 
     try {
         Write-OptimizationLog "Generating network health report in format: $Format" -Level "Info"
+
+        # Handle empty results (e.g., in WhatIf mode)
+        if ($null -eq $OptimizationResults -or $OptimizationResults.Count -eq 0) {
+            Write-OptimizationLog "No optimization results to report (WhatIf mode or no optimizations performed)" -Level "Info"
+            return @{
+                Success = $true
+                Message = "No optimization results to report"
+                Timestamp = Get-Date
+                OutputPath = $OutputPath
+                Files = @()
+                Summary = @{
+                    TotalOptimizations = 0
+                    SuccessfulOptimizations = 0
+                    FailedOptimizations = 0
+                    SuccessRate = 0
+                    TotalChanges = 0
+                    TotalErrors = 0
+                }
+            }
+        }
 
         # Ensure output directory exists
         if (-not (Test-Path $OutputPath)) {
@@ -7540,8 +7560,8 @@ function New-NetworkHealthReport {
         $totalOptimizations = $OptimizationResults.Count
         $successfulOptimizations = ($OptimizationResults | Where-Object { $_.Success }).Count
         $failedOptimizations = $totalOptimizations - $successfulOptimizations
-        $totalChanges = ($OptimizationResults | ForEach-Object { $_.AfterValues.Count } | Measure-Object -Sum).Sum
-        $totalErrors = ($OptimizationResults | ForEach-Object { $_.Errors.Count } | Measure-Object -Sum).Sum
+        $totalChanges = if ($OptimizationResults.Count -gt 0) { ($OptimizationResults | ForEach-Object { $_.AfterValues.Count } | Measure-Object -Sum).Sum } else { 0 }
+        $totalErrors = if ($OptimizationResults.Count -gt 0) { ($OptimizationResults | ForEach-Object { $_.Errors.Count } | Measure-Object -Sum).Sum } else { 0 }
 
         $reportInfo.Summary = @{
             TotalOptimizations = $totalOptimizations
