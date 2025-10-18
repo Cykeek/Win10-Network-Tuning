@@ -35,6 +35,15 @@ $Script:StartTime = Get-Date
 # Global error handling preference
 $ErrorActionPreference = 'Stop'
 
+# Suppress verbose WhatIf messages for clean output
+$VerbosePreference = 'SilentlyContinue'
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+if ($WhatIfPreference) {
+    $WhatIfPreference = $true
+    $ConfirmPreference = 'None'
+}
+
 # Initialize script-wide variables
 $Script:LogFile = $null
 $Script:BackupPath = $null
@@ -49,7 +58,90 @@ $Script:NetworkAdaptersCache = $null
 $Script:NetworkAdaptersCacheTime = $null
 $Script:NetworkAdaptersCacheTTL = 30 # seconds
 
+# Progress tracking
+$Script:CurrentStep = 0
+$Script:TotalSteps = 0
+$Script:ProgressBarWidth = 50
+
 #region Core Framework Functions
+
+function Write-ProgressBar {
+    # Clean progress bar for user-friendly output
+    param(
+        [int]$Current,
+        [int]$Total,
+        [string]$Activity = "Processing",
+        [string]$Status = ""
+    )
+
+    if ($Total -eq 0) { return }
+
+    $percent = [math]::Min(100, [math]::Round(($Current / $Total) * 100))
+    $filled = [math]::Round(($percent / 100) * $Script:ProgressBarWidth)
+    $empty = $Script:ProgressBarWidth - $filled
+
+    $bar = "[" + ("█" * $filled) + ("░" * $empty) + "]"
+
+    $statusMsg = if ($Status) { " - $Status" } else { "" }
+
+    Write-Host "`r$bar $percent% - $Activity$statusMsg" -NoNewline -ForegroundColor Cyan
+
+    if ($Current -eq $Total) {
+        Write-Host ""
+    }
+}
+
+function Show-CleanMessage {
+    # User-friendly message display
+    param(
+        [string]$Message,
+        [ValidateSet("Info", "Success", "Warning", "Error", "Progress")]
+        [string]$Type = "Info"
+    )
+
+    $icon = switch ($Type) {
+        "Success" { "✅" }
+        "Warning" { "⚠️" }
+        "Error" { "❌" }
+        "Progress" { "⏳" }
+        default { "ℹ️" }
+    }
+
+    $color = switch ($Type) {
+        "Success" { "Green" }
+        "Warning" { "Yellow" }
+        "Error" { "Red" }
+        "Progress" { "Cyan" }
+        default { "White" }
+    }
+
+    Write-Host "$icon $Message" -ForegroundColor $color
+}
+
+function Start-AnimatedTask {
+    # Execute task with spinner animation
+    param(
+        [scriptblock]$Task,
+        [string]$Message = "Processing..."
+    )
+
+    $spinnerChars = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
+    $spinnerIndex = 0
+
+    $job = Start-Job -ScriptBlock $Task
+
+    while ($job.State -eq 'Running') {
+        Write-Host "`r$($spinnerChars[$spinnerIndex]) $Message" -NoNewline -ForegroundColor Cyan
+        $spinnerIndex = ($spinnerIndex + 1) % $spinnerChars.Count
+        Start-Sleep -Milliseconds 100
+    }
+
+    Write-Host "`r" -NoNewline
+    $result = Receive-Job -Job $job
+    Remove-Job -Job $job
+
+    return $result
+}
 
 function Test-AdministratorPrivileges {
     # Check if running as administrator (cached)
@@ -138,16 +230,23 @@ function Initialize-NetworkOptimizer {
     param()
 
     try {
-        Write-Host "Initializing Network Optimizer v$Script:Version..." -ForegroundColor Cyan
+        # Clean header
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host "   Network Optimizer v$Script:Version" -ForegroundColor Cyan
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host ""
+
+        Show-CleanMessage "Initializing..." -Type Progress
 
         # Auto-enable WhatIf if not running as admin and AutoPreview is enabled
         if ($AutoPreview -and -not (Test-AdministratorPrivileges)) {
-            Write-Host "⚠️  Non-admin mode - switched to preview mode automatically" -ForegroundColor Yellow
+            Show-CleanMessage "Non-admin mode detected - Preview mode enabled" -Type Warning
             $WhatIfPreference = $true
             $PSBoundParameters['WhatIf'] = $true
             $Script:AutoPreviewEnabled = $true
         } elseif ($AutoPreview -and (Test-AdministratorPrivileges)) {
-            Write-Host "Running as administrator - AutoPreview disabled, proceeding with full execution mode" -ForegroundColor Green
+            Show-CleanMessage "Administrator mode - Full execution enabled" -Type Success
             $Script:AutoPreviewEnabled = $false
         }
 
@@ -162,7 +261,7 @@ function Initialize-NetworkOptimizer {
         Write-OptimizationLog "Parameters: Silent=$Silent, ConfigFile=$ConfigFile, LogPath=$LogPath, WhatIf=$($PSBoundParameters.ContainsKey('WhatIf'))" -Level "Info"
 
         # Perform comprehensive safety validation
-        Write-Host "Performing safety validation..." -ForegroundColor Yellow
+        Show-CleanMessage "Performing safety checks..." -Type Progress
         $safetyValidation = Test-SafetyValidation
 
         if (-not $safetyValidation.OverallSuccess) {
@@ -172,17 +271,26 @@ function Initialize-NetworkOptimizer {
 
             if ($isAdminIssue -and $isAdminIssue.Count -eq $safetyValidation.Errors.Count) {
                 # Concise admin privileges error
-                Write-Host "`n⚠️  Administrator privileges required" -ForegroundColor Yellow
-
-                if ($isRemoteExecution) {
-                    Write-Host "💡 Run as admin: Right-click PowerShell → 'Run as Administrator' | Preview: add -WhatIf" -ForegroundColor Cyan
-                } else {
-                    Write-Host "💡 Run as admin: Right-click PowerShell → 'Run as Administrator' | Preview: add -WhatIf" -ForegroundColor Cyan
-                }
+                Write-Host ""
+                Show-CleanMessage "Administrator privileges required" -Type Warning
+                Write-Host "   💡 Right-click PowerShell → 'Run as Administrator'" -ForegroundColor DarkGray
+                Write-Host "   💡 Or add -WhatIf for preview mode" -ForegroundColor DarkGray
             } else {
                 # Multiple issues - show concise error
-                Write-Host "`n❌ Safety validation failed ($($safetyValidation.Errors.Count) errors, $($safetyValidation.Warnings.Count) warnings)" -ForegroundColor Red
+                Write-Host ""
+                Show-CleanMessage "Safety validation failed ($($safetyValidation.Errors.Count) errors)" -Type Error
                 foreach ($errItem in $safetyValidation.Errors) {
+                    Write-Host "   • $errItem" -ForegroundColor Red</parameter>
+
+<old_text line=240>
+        # Create backup directory
+        $Script:BackupPath = Join-Path $env:TEMP "NetworkOptimizer_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        New-Item -Path $Script:BackupPath -ItemType Directory -Force | Out-Null
+        Write-OptimizationLog "Backup directory created: $Script:BackupPath" -Level "Info"
+
+        # Create system restore point for rollback capability
+        $restorePointCreated = $false
+        Write-Host "Creating system restore point..." -ForegroundColor Yellow
                     Write-Host "   • $error" -ForegroundColor Red
                 }
                 if ($safetyValidation.Warnings.Count -gt 0) {
@@ -202,7 +310,6 @@ function Initialize-NetworkOptimizer {
         Write-OptimizationLog "Backup directory created: $Script:BackupPath" -Level "Info"
 
         # Create system restore point for rollback capability
-        Write-Host "Creating system restore point..." -ForegroundColor Yellow
         $restorePointResult = New-SystemRestorePoint -Description "Network Optimizer - Before Optimization"
 
         # Track restore point status for later use
@@ -211,28 +318,24 @@ function Initialize-NetworkOptimizer {
 
         if ($restorePointResult.Success) {
             Write-OptimizationLog "System restore point created successfully: $($restorePointResult.Message)" -Level "Info"
-            Write-Host "✓ $($restorePointResult.Message)" -ForegroundColor Green
+            Show-CleanMessage "Restore point created" -Type Success
         } else {
             Write-OptimizationLog "System restore point creation failed: $($restorePointResult.Message)" -Level "Warning"
-            Write-Host "⚠️  $($restorePointResult.Message)" -ForegroundColor Yellow
+            Show-CleanMessage "Restore point unavailable (continuing with registry backups)" -Type Warning
 
             if (-not $Silent) {
-                Write-Host "`nContinue with registry backups only? (Y/n)" -ForegroundColor Yellow -NoNewline
-                $continue = Read-Host " "
+                Write-Host ""
+                Write-Host "Continue with registry backups only? (Y/n): " -NoNewline -ForegroundColor Yellow
+                $continue = Read-Host
                 if ($continue -match '^[Nn]') {
                     Write-OptimizationLog "User declined to continue without restore point" -Level "Warning"
-                    throw "Operation cancelled by user due to restore point failure"
+                    throw "Operation cancelled by user"
                 }
-                Write-Host "✓ Proceeding with registry backups for safety" -ForegroundColor Green
-            } else {
-                # In Silent mode, automatically continue with registry backups
-                Write-OptimizationLog "Silent mode: Automatically continuing with registry backups only" -Level "Info"
-                Write-Host "✓ Proceeding with registry backups for safety (Silent mode)" -ForegroundColor Green
             }
         }
 
         # Backup current network settings
-        Write-Host "Backing up current network settings..." -ForegroundColor Yellow
+        Show-CleanMessage "Backing up current settings..." -Type Progress
         $Script:BackupInfo = Backup-NetworkSettings -BackupPath $Script:BackupPath
         if (-not $Script:BackupInfo.Success) {
             throw "Failed to backup current network settings. Cannot proceed safely."
@@ -244,23 +347,17 @@ function Initialize-NetworkOptimizer {
         Write-OptimizationLog "Optimization results tracking initialized" -Level "Info"
 
         # Display safety summary
-        Write-Host "`nSafety mechanisms initialized:" -ForegroundColor Green
-        Write-Host "  ✅ Safety validation passed" -ForegroundColor Green
-        Write-Host "  ✅ Backup directory: $Script:BackupPath" -ForegroundColor Green
-        if ($restorePointCreated) {
-            Write-Host "  ✅ System restore point created" -ForegroundColor Green
-        } else {
-            Write-Host "  ⚠️  System restore point not available" -ForegroundColor Yellow
-        }
-        Write-Host "  ✅ Network settings backed up" -ForegroundColor Green
-
-        Write-Host "`nInitialization complete!" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Green
+        Show-CleanMessage "Safety Checks Complete" -Type Success
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Green
+        Write-Host ""
         Write-OptimizationLog "Network Optimizer initialization completed successfully with full safety mechanisms" -Level "Info"
         return $true
     }
     catch {
-        $errorMessage = "Failed to initialize Network Optimizer: $($_.Exception.Message)"
-        Write-Error $errorMessage
+        $errorMessage = "Failed to initialize: $($_.Exception.Message)"
+        Show-CleanMessage $errorMessage -Type Error
         Write-OptimizationLog $errorMessage -Level "Error"
 
         # Cleanup on failure
@@ -324,8 +421,6 @@ function Invoke-SafeOperation {
         if ($PSCmdlet.ShouldProcess($OperationName, "Execute Operation")) {
             # Continue with operation
         } else {
-            Write-Host "WHATIF: Would execute $OperationName" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would execute $OperationName" -Level "Info"
             return $true
         }
 
@@ -384,10 +479,8 @@ function New-SystemRestorePoint {
         if ($PSCmdlet.ShouldProcess($Description, "Create System Restore Point")) {
             # Continue with actual creation
         } else {
-            Write-Host "WHATIF: Would create system restore point: $Description" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would create system restore point: $Description" -Level "Info"
             $result.Success = $true
-            $result.Message = "WhatIf mode - restore point creation simulated"
+            $result.Message = "Preview mode - skipped"
             return $result
         }
 
@@ -496,7 +589,6 @@ function New-SystemRestorePoint {
 
         # Step 6: Create the restore point
         Write-OptimizationLog "Creating restore point..." -Level "Info"
-        Write-Host "Creating system restore point..." -ForegroundColor Yellow
 
         # Use Checkpoint-Computer with enhanced error handling
         Checkpoint-Computer -Description $Description -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop
@@ -517,7 +609,6 @@ function New-SystemRestorePoint {
                     SequenceNumber = $latestRestorePoint.SequenceNumber
                 }
                 Write-OptimizationLog "System restore point verified: $Description" -Level "Info"
-                Write-Host "✓ System restore point created successfully" -ForegroundColor Green
             } else {
                 $result.Message = "Restore point creation could not be verified"
                 Write-OptimizationLog "Could not verify restore point creation" -Level "Warning"
@@ -602,8 +693,6 @@ function Backup-NetworkSettings {
         if ($PSCmdlet.ShouldProcess($BackupPath, "Backup Network Settings")) {
             # Continue with backup
         } else {
-            Write-Host "WHATIF: Would backup network settings to: $BackupPath" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would backup network settings to: $BackupPath" -Level "Info"
             return @{ Success = $true; BackupPath = $BackupPath; Files = @() }
         }
 
@@ -758,8 +847,6 @@ function Restore-NetworkSettings {
         if ($PSCmdlet.ShouldProcess("Network Settings", "Restore from Backup")) {
             # Continue with restoration
         } else {
-            Write-Host "WHATIF: Would restore network settings from backup" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would restore network settings from backup" -Level "Info"
             return $true
         }
 
@@ -1672,8 +1759,6 @@ class OptimizationOption {
             if ($PSCmdlet -and $PSCmdlet.ShouldProcess($this.Name, "Execute Optimization")) {
                 # Continue with optimization execution
             } elseif ($PSBoundParameters.ContainsKey('WhatIf')) {
-                Write-Host "WHATIF: Would execute optimization '$($this.Name)'" -ForegroundColor Magenta
-                Write-OptimizationLog "WHATIF: Would execute optimization '$($this.Name)'" -Level "Info"
                 return $true
             }
 
@@ -3438,12 +3523,8 @@ function Optimize-DNSCache {
             }
         } else {
             $result.Success = $true
-            $result.Message = "WHATIF: Would apply DNS cache optimizations"
+            $result.Message = "Preview mode"
             $result.AfterValues = $settingsToApply
-            Write-Host "WHATIF: Would apply DNS cache optimizations:" -ForegroundColor Magenta
-            foreach ($setting in $settingsToApply.Keys) {
-                Write-Host "  $setting : $($currentValues[$setting]) -> $($settingsToApply[$setting])" -ForegroundColor Cyan
-            }
         }
     }
     catch {
@@ -6418,48 +6499,57 @@ function Start-NetworkOptimizer {
         Write-OptimizationLog "Configuration management system initialized successfully" -Level "Info"
 
         if ($Silent) {
-            Write-Host "Running in silent mode with recommended settings..." -ForegroundColor Yellow
+            Show-CleanMessage "Silent mode activated - Applying recommended settings" -Type Progress
             Write-OptimizationLog "Silent mode execution started" -Level "Info"
 
             # Select recommended options for silent mode
             $Script:Config.SelectRecommendedOptions()
-            $selectedCount = ($Script:Config.GetSelectedOptions()).Count
-            Write-Host "Selected $selectedCount recommended optimizations for silent execution" -ForegroundColor Cyan
-
-            # Execute selected optimizations using the optimization execution engine
-            Write-Host "Executing selected optimizations..." -ForegroundColor Cyan
             $selectedOptions = $Script:Config.GetSelectedOptions()
+            $selectedCount = $selectedOptions.Count
 
-            if ($selectedOptions.Count -gt 0) {
-                $executionResult = Invoke-SelectedOptimizations -SelectedOptions $selectedOptions -Config $Script:Config -ContinueOnError
+            if ($selectedCount -eq 0) {
+                Show-CleanMessage "No optimizations selected" -Type Warning
+                return
+            }
 
-                # Store results in global variable for reporting
-                $Script:OptimizationResults = $executionResult.Results
+            Write-Host ""
+            Show-CleanMessage "Preparing $selectedCount optimizations..." -Type Progress
 
-                if ($executionResult.Success) {
-                    Write-Host "[OK] Silent mode optimization execution completed successfully" -ForegroundColor Green
-                    Write-OptimizationLog "Silent mode execution completed successfully" -Level "Info"
-                } else {
-                    Write-Host "[FAIL] Silent mode optimization execution completed with errors" -ForegroundColor Yellow
-                    Write-OptimizationLog "Silent mode execution completed with errors" -Level "Warning"
-                }
+            # Execute with progress tracking
+            $Script:TotalSteps = $selectedCount
+            $Script:CurrentStep = 0
 
-                # Generate summary report
-                $reportResult = New-NetworkHealthReport -OptimizationResults $Script:OptimizationResults
-                if ($reportResult.Success) {
-                    Write-Host "Network health report generated: $($reportResult.ReportPath)" -ForegroundColor Cyan
-                }
+            Write-Host ""
+            $executionResult = Invoke-SelectedOptimizations -SelectedOptions $selectedOptions -Config $Script:Config -ContinueOnError
+
+            # Store results in global variable for reporting
+            $Script:OptimizationResults = $executionResult.Results
+
+            Write-Host ""
+            if ($executionResult.Success) {
+                Show-CleanMessage "All optimizations applied successfully!" -Type Success
+                Write-OptimizationLog "Silent mode execution completed successfully" -Level "Info"
             } else {
-                Write-Host "No optimizations selected for execution" -ForegroundColor Yellow
+                Show-CleanMessage "Completed with some errors - check log for details" -Type Warning
+                Write-OptimizationLog "Silent mode execution completed with errors" -Level "Warning"
+            }
+
+            # Generate summary report (suppress verbose output)
+            Write-Host ""
+            Show-CleanMessage "Generating report..." -Type Progress
+            $reportResult = New-NetworkHealthReport -OptimizationResults $Script:OptimizationResults
+            if ($reportResult.Success -and $reportResult.Files.Count -gt 0) {
+                Show-CleanMessage "Report saved" -Type Success
             }
         } else {
-            Write-Host "Starting interactive menu system..." -ForegroundColor Cyan
+            Show-CleanMessage "Interactive mode - Starting menu system..." -Type Progress
             Write-OptimizationLog "Starting interactive mode" -Level "Info"
 
             # Display configuration summary
-            Write-Host "`nConfiguration Summary:" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "Available Optimizations:" -ForegroundColor Cyan
             foreach ($category in ($Script:Config.Options | Group-Object Category)) {
-                Write-Host "  $($category.Name): $($category.Count) options" -ForegroundColor Gray
+                Write-Host "  • $($category.Name): $($category.Count) options" -ForegroundColor Gray
             }
             Write-Host ""
 
@@ -6467,7 +6557,11 @@ function Start-NetworkOptimizer {
             Start-InteractiveMenu
         }
 
-        Write-Host "`nNetwork Optimizer framework and configuration system initialized successfully!" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Green
+        Show-CleanMessage "Ready!" -Type Success
+        Write-Host "═══════════════════════════════════════════════" -ForegroundColor Green
+        Write-Host ""
         Write-OptimizationLog "Network Optimizer execution completed successfully" -Level "Info"
     }
     catch {
@@ -6559,8 +6653,6 @@ function Invoke-SelectedOptimizations {
     if ($PSCmdlet.ShouldProcess("$($execContext.TotalOptimizations) optimizations", "Execute Network Optimizations")) {
             # Continue with execution
         } else {
-            Write-Host "WHATIF: Would execute $($execContext.TotalOptimizations) network optimizations" -ForegroundColor Magenta
-            Write-OptimizationLog "WHATIF: Would execute $($execContext.TotalOptimizations) network optimizations" -Level "Info"
             return @{
                 Success = $true
                 Results = @()
@@ -6569,25 +6661,14 @@ function Invoke-SelectedOptimizations {
             }
         }
 
-        # Display execution banner
-        Write-Host @"
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        OPTIMIZATION EXECUTION ENGINE                         ║
-║                     Executing $($execContext.TotalOptimizations.ToString().PadLeft(2)) Network Optimizations                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-"@ -ForegroundColor Green
-
-        # Pre-execution validation
+        # Pre-execution validation (silent)
         if ($ValidateBeforeExecution) {
-            Write-Host "Performing pre-execution validation..." -ForegroundColor Yellow
             $preValidation = Test-PreExecutionValidation -SelectedOptions $SelectedOptions -Config $Config
 
             if (-not $preValidation.Success) {
                 throw "Pre-execution validation failed: $($preValidation.Message)"
             }
 
-            Write-Host "✅ Pre-execution validation passed" -ForegroundColor Green
             Write-OptimizationLog "Pre-execution validation completed successfully" -Level "Info"
         }
 
@@ -6595,18 +6676,13 @@ function Invoke-SelectedOptimizations {
         for ($i = 0; $i -lt $SelectedOptions.Count; $i++) {
             $option = $SelectedOptions[$i]
             $currentStep = $i + 1
+            $Script:CurrentStep = $currentStep
 
             try {
-                # Update progress
-                $progressParams = @{
-                    Activity = "Executing Network Optimizations"
-                    Status = "Processing: $($option.Name)"
-                    CurrentOperation = "$currentStep of $($execContext.TotalOptimizations)"
-                    PercentComplete = [math]::Round(($currentStep / $execContext.TotalOptimizations) * 100)
-                }
-                Write-Progress @progressParams
+                # Update progress with clean progress bar
+                Write-ProgressBar -Current $currentStep -Total $execContext.TotalOptimizations -Activity "Optimizing" -Status $option.Name
 
-                Write-Host "`n[$currentStep/$($execContext.TotalOptimizations)] $($option.Name)" -ForegroundColor Cyan
+                # Progress bar shows the status
                 Write-OptimizationLog "Starting optimization: $($option.Name) (Step $currentStep of $($execContext.TotalOptimizations))" -Level "Info"
 
                 # Pre-optimization validation for this specific option
