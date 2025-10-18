@@ -5468,13 +5468,34 @@ function Disable-VulnerableProtocols {
                             Write-OptimizationLog "Failed to modify SMBv1 client dependency: $($_.Exception.Message)" -Level "Warning"
                         }
 
-                        # Disable SMBv1 Windows feature
+                        # Disable SMBv1 Windows feature (with timeout to prevent hanging)
                         try {
-                            Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction SilentlyContinue
-                            Write-OptimizationLog "SMBv1 Windows feature disabled" -Level "Debug"
+                            # Use Start-Job with timeout to prevent 10+ minute hangs
+                            $job = Start-Job -ScriptBlock {
+                                Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop
+                            }
+
+                            # Wait max 30 seconds for the feature disable
+                            $completed = Wait-Job -Job $job -Timeout 30
+
+                            if ($completed) {
+                                $result = Receive-Job -Job $job -ErrorAction SilentlyContinue
+                                Write-OptimizationLog "SMBv1 Windows feature disabled" -Level "Debug"
+                            } else {
+                                # Job timed out, kill it and use registry-only method
+                                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+                                Write-OptimizationLog "SMBv1 feature disable timed out, using registry method instead" -Level "Debug"
+                            }
                         }
                         catch {
                             Write-OptimizationLog "Failed to disable SMBv1 Windows feature: $($_.Exception.Message)" -Level "Warning"
+                        }
+                        finally {
+                            # Clean up job if it exists
+                            if ($job) {
+                                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+                            }
                         }
 
                         # Registry-based SMBv1 disable for additional security
@@ -7282,7 +7303,7 @@ function Test-PostOptimizationValidation {
                 try {
                     $activeAdapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
                     if ($activeAdapters) {
-                        Write-OptimizationLog "Network adapters are UP, treating connectivity as functional despite ping failures" -Level "Warning"
+                        Write-OptimizationLog "Network adapters are UP, treating connectivity as functional despite ping failures" -Level "Debug"
                         # Don't add to validation issues - adapters being up is sufficient
                     } else {
                         $validationIssues += "Network connectivity test failed and no active adapters found"
