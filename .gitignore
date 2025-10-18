@@ -13,8 +13,6 @@ tests/
 # Ignore backup files
 *.bak
 *.backup
-NetworkOptimizer_backup_*.ps1
-NetworkOptimizer_verbose.ps1
 
 # Ignore Windows system files
 Thumbs.db
