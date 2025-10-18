@@ -4,6 +4,9 @@
 # Ignore GitHub folder
 .github/
 
+# Ignore Zed agent memory
+.zed/
+
 # Ignore test artifacts and temporary files
 tests/
 *.log
