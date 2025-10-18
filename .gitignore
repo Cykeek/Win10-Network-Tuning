@@ -1,9 +1,3 @@
-# Ignore Kiro development specifications
-.kiro/
-
-# Ignore GitHub folder
-.github/
-
 # Ignore Zed agent memory
 .zed/
 
